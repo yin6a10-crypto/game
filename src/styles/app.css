@@ -1,0 +1,232 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  line-height: 1.4;
+  color: #1f2937;
+  background: #f3f4f6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hero-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.hero-list li {
+  display: flex;
+  justify-content: space-between;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.hint {
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.mission-slots {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.slot-card {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  background: #f8fafc;
+}
+
+.slot-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.slot-mission {
+  font-weight: 600;
+  min-height: 2.6em;
+}
+
+.slot-bonus {
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.zones-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.zone-card {
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 8px;
+  background: #eff6ff;
+}
+
+.zone-card ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+
+.players-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.mat-grid > div {
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.subpanel {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 8px;
+}
+
+.hiring-rows {
+  display: grid;
+  gap: 6px;
+}
+
+.hiring-row {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.hiring-row-name {
+  font-weight: 600;
+}
+
+.hiring-row-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.disabled-row {
+  opacity: 0.6;
+  background: #f9fafb;
+}
+
+.resolution-panel {
+  margin-top: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.resolution-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.warning {
+  color: #b45309;
+}
+
+.prep-slots {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(70px, 1fr));
+  gap: 6px;
+}
+
+.prep-slot {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  min-height: 100px;
+  padding: 4px 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.prep-slot small {
+  color: #6b7280;
+}
+
+.prep-slot span {
+  font-size: 0.85rem;
+}
+
+.assign-controls {
+  display: grid;
+  gap: 4px;
+}
+
+.poach-row {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+  margin-top: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+@media (max-width: 900px) {
+  .mission-slots,
+  .players-grid,
+  .zones-grid,
+  .mat-grid {
+    grid-template-columns: 1fr;
+  }
+}
