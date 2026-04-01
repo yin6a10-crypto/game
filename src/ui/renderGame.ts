@@ -33,6 +33,7 @@ interface RenderActions {
   onDepartMission: (playerId: string, missionId: string) => void;
   onAdvanceWorldMap: () => void;
   onAcceptMission: (playerId: string, missionId: string) => void;
+  onAcceptPass: () => void;
   onResolveMission: (missionId: string) => void;
   onContinuePhase: () => void;
   onDismissPopup: () => void;
@@ -172,6 +173,10 @@ const attachActionButtons = (root: HTMLElement, actions: RenderActions): void =>
 
   root.querySelectorAll<HTMLElement>('[data-action="continue-phase"]').forEach((button) => {
     button.addEventListener('click', () => actions.onContinuePhase());
+  });
+
+  root.querySelectorAll<HTMLElement>('[data-action="accept-pass"]').forEach((button) => {
+    button.addEventListener('click', () => actions.onAcceptPass());
   });
 };
 
@@ -344,7 +349,7 @@ const renderMissionCard = (
   </article>`;
 };
 
-const renderMissionBoard = (state: GameState, phaseLabel: string): string => {
+const renderMissionBoard = (state: GameState, phaseLabel: string, activeAcceptPlayerId: string | null): string => {
   const bonus = (i: number): string => (i === 4 ? '+1 Gem' : i === 3 ? '+1 Silver' : '-');
 
   return `
@@ -355,10 +360,11 @@ const renderMissionBoard = (state: GameState, phaseLabel: string): string => {
           slot.missionId ? renderMissionCard(state, slot.missionId, 'Needs Roles') : '<div class="slot-mission">Empty</div>'
         }<div class="slot-bonus">${bonus(i)}</div>${
           slot.missionId
-            ? `<div class="resolution-actions"><button data-action="accept-mission" data-player-id="p1" data-mission-id="${slot.missionId}" ${phaseLabel === 'Accept Missions' ? '' : 'disabled'}>Accept P1</button><button data-action="accept-mission" data-player-id="p2" data-mission-id="${slot.missionId}" ${phaseLabel === 'Accept Missions' ? '' : 'disabled'}>Accept P2</button></div>`
+            ? `<div class="resolution-actions"><button data-action="accept-mission" data-player-id="p1" data-mission-id="${slot.missionId}" ${phaseLabel === 'Accept Missions' && activeAcceptPlayerId === 'p1' ? '' : 'disabled'}>Accept P1</button><button data-action="accept-mission" data-player-id="p2" data-mission-id="${slot.missionId}" ${phaseLabel === 'Accept Missions' && activeAcceptPlayerId === 'p2' ? '' : 'disabled'}>Accept P2</button></div>`
             : ''
         }</article>`)
         .join('')}</div>
+      ${phaseLabel === 'Accept Missions' ? '<button data-action="accept-pass">Pass</button>' : ''}
     </section>
   `;
 };
@@ -394,9 +400,8 @@ const renderPlayerMat = (state: GameState, playerId: string, phaseLabel: string)
       <h2>${player.name} Mat</h2>
       <div class="stats-row"><span>Reputation: <strong>${player.reputation}</strong></span><span>Silver: <strong>${player.silver}</strong></span><span>Gold: <strong>${player.gold}</strong></span><span>Gems: <strong>${player.gems}</strong></span></div>
       <div class="mat-grid">
-        <div><h3>Preparation Area</h3>${renderPreparationSlots(state, player, phaseLabel)}</div>
         <div><h3>Rest Zone</h3><p>${toHeroNameList(state, player.restZoneHeroIds)}</p></div>
-        <div><h3>Backlog Area</h3><p>${toMissionTitleList(state, player.backlogMissionIds)}</p></div>
+        <div class="prep-area"><h3>Preparation Area</h3>${renderPreparationSlots(state, player, phaseLabel)}</div>
         ${renderHiredPool(state, player)}
       </div>
       <section class="subpanel"><h3>Guild Hiring Board</h3>${renderHiringRows(player, state.hiring.offersLocked, Boolean(state.poaching.pending), phaseLabel)}</section>
@@ -414,15 +419,18 @@ export const renderGame = (
   actingPlayer: string,
   phaseInstruction: string,
   canContinue: boolean,
+  deckCounts: { stage1: number; stage2: number; stage3: number },
+  setupPhase: boolean,
+  activeAcceptPlayerId: string | null,
 ): void => {
   root.innerHTML = `
     <main class="app-shell">
       <h1>Fantasy Adventurers Guild — Prototype Scaffold</h1>
-      <section class="panel stage-round"><h2>Current Phase: ${phaseLabel}</h2><p><strong>Acting:</strong> ${actingPlayer}</p><p class="hint">${phaseInstruction}</p><div class="stats-row"><span>Stage: <strong>${state.stage}</strong></span><span>Round: <strong>${state.round}</strong></span></div><button data-action="continue-phase" ${canContinue ? '' : 'disabled'}>Next Step / Continue</button></section>
+      <section class="panel stage-round"><h2>Current Phase: ${phaseLabel}</h2><p><strong>Acting:</strong> ${actingPlayer}</p><p class="hint">${phaseInstruction}</p><div class="stats-row"><span>Stage: <strong>${state.stage}</strong></span><span>Round: <strong>${state.round}</strong></span><span>Stage 1 Remaining: <strong>${deckCounts.stage1}</strong></span><span>Stage 2 Remaining: <strong>${deckCounts.stage2}</strong></span><span>Stage 3 Remaining: <strong>${deckCounts.stage3}</strong></span></div><button data-action="continue-phase" ${canContinue ? '' : 'disabled'}>${setupPhase ? 'Start Game Setup' : 'Next Step / Continue'}</button></section>
       <section class="panel"><h2>Hire Resolution</h2><button data-action="lock-offers" ${state.hiring.offersLocked || state.poaching.pending || phaseLabel !== 'Guild Hiring' ? 'disabled' : ''}>Lock Offers / Start Hiring</button>${renderHiringResolutionPanel(state, phaseLabel)}</section>
       <section class="panel"><h2>Ranger Poaching</h2>${renderPendingPoachPanel(state, phaseLabel)}</section>
       <section class="panel hero-village"><h2>Hero Village (Public Pool)</h2><ul class="hero-list">${state.heroVillageHeroIds.map((heroId) => `<li><strong>${getHeroName(state, heroId)}</strong></li>`).join('')}</ul></section>
-      ${renderMissionBoard(state, phaseLabel)}
+      ${renderMissionBoard(state, phaseLabel, activeAcceptPlayerId)}
       <section class="panel world-map"><h2>World Map</h2><button data-action="advance-world-map" ${state.poaching.pending || phaseLabel !== 'World Map Advance' ? 'disabled' : ''}>Advance World Map</button><div class="zones-grid">${state.worldMap.map((zone) => renderZone(state, zone, phaseLabel)).join('')}</div></section>
       <section class="players-grid">${renderPlayerMat(state, 'p1', phaseLabel)}${renderPlayerMat(state, 'p2', phaseLabel)}</section>
       ${

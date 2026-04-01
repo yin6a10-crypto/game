@@ -30,6 +30,7 @@ if (!root) {
 const state = createInitialState();
 let gameState = state;
 let popupQueue: string[] = [];
+let isSetupComplete = false;
 const demoPhases = [
   'Accept Missions',
   'Guild Hiring',
@@ -43,6 +44,15 @@ const demoPhases = [
 ] as const;
 type DemoPhase = (typeof demoPhases)[number];
 let currentDemoPhaseIndex = 0;
+let activeAcceptPlayerIndex = 0;
+let passedAcceptPlayers = new Set<string>();
+
+const STARTING_RESOURCES = {
+  reputation: 0,
+  silver: 6,
+  gold: 1,
+  gems: 2,
+} as const;
 
 const phaseInstruction: Record<DemoPhase, string> = {
   'Accept Missions': 'Take 1 mission or pass.',
@@ -57,6 +67,39 @@ const phaseInstruction: Record<DemoPhase, string> = {
 };
 
 const getCurrentDemoPhase = (): DemoPhase => demoPhases[currentDemoPhaseIndex];
+
+const getDeckCounts = (state: GameState): { stage1: number; stage2: number; stage3: number } => {
+  const onBoard = new Set(state.missionBoard.map((slot) => slot.missionId).filter((id): id is string => Boolean(id)));
+  const stage1 = state.missions.filter((m) => m.stage === 1 && !onBoard.has(m.id)).length;
+  const stage2 = state.missions.filter((m) => m.stage === 2).length;
+  const stage3 = state.missions.filter((m) => m.stage === 3).length;
+  return { stage1, stage2, stage3 };
+};
+
+const initializeDemoSetup = (): void => {
+  const stage1Missions = gameState.missions.filter((mission) => mission.stage === 1).map((mission) => mission.id);
+  const boardIds = stage1Missions.slice(0, 5);
+  gameState = {
+    ...gameState,
+    missionBoard: gameState.missionBoard.map((slot, idx) => ({ ...slot, missionId: boardIds[idx] ?? null })),
+    heroVillageHeroIds: gameState.heroes.filter((hero) => !(hero.heroClass === 'Warrior' && hero.level === 3)).map((hero) => hero.id),
+    players: gameState.players.map((player) => ({
+      ...player,
+      reputation: STARTING_RESOURCES.reputation,
+      silver: STARTING_RESOURCES.silver,
+      gold: STARTING_RESOURCES.gold,
+      gems: STARTING_RESOURCES.gems,
+      preparationSlots: [null, null, null, null, null],
+      restZoneHeroIds: [],
+      hiredPoolHeroIds: [],
+    })),
+    assignment: { ...gameState.assignment, assignedHeroIdsByMission: {} },
+  };
+  isSetupComplete = true;
+  currentDemoPhaseIndex = 0;
+  activeAcceptPlayerIndex = 0;
+  passedAcceptPlayers = new Set();
+};
 
 const enqueuePopup = (message: string): void => {
   if (popupQueue.includes(message)) return;
@@ -109,15 +152,20 @@ const collectGuidanceMessages = (previous: GameState, next: GameState): string[]
 
 const render = (): void => {
   const popupMessage = popupQueue.length > 0 ? popupQueue[0] : null;
+  const setupPhase = !isSetupComplete;
   const phase = getCurrentDemoPhase();
   const currentHire = getCurrentResolutionItem(gameState);
   const pendingPoach = gameState.poaching.pending;
   const actingPlayer =
-    phase === 'Hire Resolution' && currentHire
-      ? gameState.players.find((player) => player.id === currentHire.priorityPlayerIds[currentHire.currentPriorityIndex])?.name ?? '-'
-      : phase === 'Ranger Poach' && pendingPoach
-        ? gameState.players.find((player) => player.id === pendingPoach.fromPlayerId)?.name ?? '-'
-        : 'Both Players';
+    setupPhase
+      ? 'System'
+      : phase === 'Accept Missions'
+        ? gameState.players[activeAcceptPlayerIndex]?.name ?? 'Player'
+        : phase === 'Hire Resolution' && currentHire
+          ? gameState.players.find((player) => player.id === currentHire.priorityPlayerIds[currentHire.currentPriorityIndex])?.name ?? '-'
+          : phase === 'Ranger Poach' && pendingPoach
+            ? gameState.players.find((player) => player.id === pendingPoach.fromPlayerId)?.name ?? '-'
+            : 'Both Players';
   const canContinue = popupQueue.length === 0;
 
   renderGame(root, gameState, {
@@ -199,10 +247,22 @@ const render = (): void => {
       render();
     },
     onAcceptMission: (playerId, missionId) => {
-      if (phase !== 'Accept Missions') return;
+      if (phase !== 'Accept Missions' || setupPhase) return;
+      const activePlayerId = gameState.players[activeAcceptPlayerIndex]?.id;
+      if (playerId !== activePlayerId || passedAcceptPlayers.has(playerId)) return;
       const prev = gameState;
       gameState = acceptMissionFromBoard(gameState, playerId, missionId);
+      activeAcceptPlayerIndex = (activeAcceptPlayerIndex + 1) % gameState.players.length;
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      render();
+    },
+    onAcceptPass: () => {
+      if (phase !== 'Accept Missions' || setupPhase) return;
+      const activePlayerId = gameState.players[activeAcceptPlayerIndex]?.id;
+      if (!activePlayerId) return;
+      passedAcceptPlayers.add(activePlayerId);
+      const nextIndex = (activeAcceptPlayerIndex + 1) % gameState.players.length;
+      activeAcceptPlayerIndex = nextIndex;
       render();
     },
     onResolveMission: (missionId) => {
@@ -214,14 +274,27 @@ const render = (): void => {
     },
     onContinuePhase: () => {
       if (!canContinue) return;
+      if (setupPhase) {
+        initializeDemoSetup();
+        enqueuePopup(`Phase: ${getCurrentDemoPhase()} — Acting: ${gameState.players[0]?.name ?? 'Player 1'} — ${phaseInstruction[getCurrentDemoPhase()]}`);
+        render();
+        return;
+      }
+      if (phase === 'Accept Missions' && passedAcceptPlayers.size < gameState.players.length) return;
       currentDemoPhaseIndex = Math.min(currentDemoPhaseIndex + 1, demoPhases.length - 1);
+      if (phase === 'Accept Missions') {
+        passedAcceptPlayers = new Set();
+        activeAcceptPlayerIndex = 0;
+      }
+      const nextPhase = getCurrentDemoPhase();
+      enqueuePopup(`Phase: ${nextPhase} — Acting: ${nextPhase === 'Accept Missions' ? gameState.players[0]?.name ?? 'Player 1' : 'Both Players'} — ${phaseInstruction[nextPhase]}`);
       render();
     },
     onDismissPopup: () => {
       popupQueue = popupQueue.slice(1);
       render();
     },
-  }, popupMessage, phase, actingPlayer, phaseInstruction[phase], canContinue);
+  }, popupMessage, setupPhase ? 'Game Setup' : phase, actingPlayer, setupPhase ? 'Initialize heroes, missions, and starting resources.' : phaseInstruction[phase], canContinue, getDeckCounts(gameState), setupPhase, gameState.players[activeAcceptPlayerIndex]?.id ?? null);
 };
 
 render();
