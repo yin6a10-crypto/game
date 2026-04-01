@@ -1,4 +1,4 @@
-import { GameState, HeroId, HiringRowKey, MissionId, PlayerState, WorldMapZoneView } from '../core/types';
+import { GameState, HeroId, HiringRowKey, MissionId, PlayerState, WorldMapLaneEntry, WorldMapZoneView } from '../core/types';
 import {
   canPlayerAffordRowOffer,
   getActualOffer,
@@ -32,6 +32,7 @@ interface RenderActions {
   onDeclinePoach: (playerId: string) => void;
   onDepartMission: (playerId: string, missionId: string) => void;
   onAdvanceWorldMap: () => void;
+  onDismissPopup: () => void;
 }
 
 const getMissionTitle = (state: GameState, missionId: MissionId | null): string => {
@@ -43,7 +44,7 @@ const getMissionTitle = (state: GameState, missionId: MissionId | null): string 
 const getHeroName = (state: GameState, heroId: HeroId): string => {
   const hero = state.heroes.find((item) => item.id === heroId);
   if (!hero) return heroId;
-  return `${hero.name} (${hero.heroClass} Lv.${hero.level})`;
+  return `${hero.heroClass} Lv.${hero.level}`;
 };
 
 const toMissionTitleList = (state: GameState, missionIds: MissionId[]): string => {
@@ -142,6 +143,12 @@ const attachActionButtons = (root: HTMLElement, actions: RenderActions): void =>
       actions.onAdvanceWorldMap();
     });
   });
+
+  root.querySelectorAll<HTMLElement>('[data-action="dismiss-popup"]').forEach((button) => {
+    button.addEventListener('click', () => {
+      actions.onDismissPopup();
+    });
+  });
 };
 
 const renderPreparationSlots = (state: GameState, player: PlayerState): string => {
@@ -191,14 +198,12 @@ const renderHiringRows = (player: PlayerState, offersLocked: boolean, isPoachPen
         const actualOffer = getActualOffer(player, row.key);
         const priestBlocked = isPriestUnavailableForPlayer(player, row.key);
         const controlsDisabled = offersLocked || priestBlocked;
-        const rowClass = priestBlocked ? 'hiring-row disabled-row' : 'hiring-row';
+        const rowClass = priestBlocked ? 'hiring-box disabled-row' : 'hiring-box';
         const currency = row.currency === 'silver' ? 'silver' : 'gem';
         return `
           <div class="${rowClass}">
             <div class="hiring-row-name">${row.heroClass} Lv.${row.level}</div>
-            <div>Min: ${row.minWage} ${currency}</div>
-            <div>Extra: ${extraPay}</div>
-            <div>Offer: ${actualOffer} ${currency}</div>
+            <div class="hiring-pay">Pay: ${actualOffer} ${currency}</div>
             <div class="hiring-row-controls">
               <button data-action="adjust-extra-pay" data-player-id="${player.id}" data-row-key="${row.key}" data-delta="-1" ${controlsDisabled || extraPay === 0 || isPoachPending ? 'disabled' : ''}>-</button>
               <button data-action="adjust-extra-pay" data-player-id="${player.id}" data-row-key="${row.key}" data-delta="1" ${controlsDisabled || isPoachPending ? 'disabled' : ''}>+</button>
@@ -283,7 +288,7 @@ const renderHiringResolutionPanel = (state: GameState): string => {
 
   return `
     <div class="resolution-panel">
-      <p><strong>Resolving Hero:</strong> ${hero ? `${hero.name} (${hero.heroClass} Lv.${hero.level})` : current.heroId}</p>
+      <p><strong>Resolving Hero:</strong> ${hero ? `${hero.heroClass} Lv.${hero.level}` : current.heroId}</p>
       <p><strong>Row:</strong> ${row.heroClass} Lv.${row.level}</p>
       <p><strong>Current Priority:</strong> ${activePlayer ? activePlayer.name : activePlayerId}</p>
       <div class="resolution-actions">
@@ -295,16 +300,13 @@ const renderHiringResolutionPanel = (state: GameState): string => {
 };
 
 const renderMissionBoard = (state: GameState): string => {
-  const total = state.missionBoard.length;
-  const label = (i: number): string => (i === 0 ? 'Newest' : i === total - 1 ? 'Oldest' : i === total - 2 ? 'Second Oldest' : 'Middle');
-  const bonus = (i: number): string => (i === total - 1 ? '+1 Gem' : i === total - 2 ? '+1 Silver' : '-');
+  const bonus = (i: number): string => (i === 4 ? '+1 Gem' : i === 3 ? '+1 Silver' : '-');
 
   return `
     <section class="panel mission-board">
       <h2>Public Mission Board</h2>
-      <p class="hint">Left = newest, Right = oldest</p>
       <div class="mission-slots">${state.missionBoard
-        .map((slot, i) => `<article class="slot-card"><header><span>Slot ${i + 1}</span><small>${label(i)}</small></header><div class="slot-mission">${getMissionTitle(state, slot.missionId)}</div><div class="slot-bonus">${bonus(i)}</div></article>`)
+        .map((slot, i) => `<article class="slot-card"><header><span>Slot ${i + 1}</span></header><div class="slot-mission">${getMissionTitle(state, slot.missionId)}</div><div class="slot-bonus">${bonus(i)}</div></article>`)
         .join('')}</div>
     </section>
   `;
@@ -312,7 +314,7 @@ const renderMissionBoard = (state: GameState): string => {
 
 const renderLane = (
   state: GameState,
-  entries: Array<{ missionId: MissionId; position: number; assignedHeroIds: HeroId[]; enteredStep: number }>,
+  entries: WorldMapLaneEntry[],
   laneLength: number,
 ): string => {
   if (entries.length === 0) return '-';
@@ -347,18 +349,29 @@ const renderPlayerMat = (state: GameState, playerId: string): string => {
   `;
 };
 
-export const renderGame = (root: HTMLElement, state: GameState, actions: RenderActions): void => {
+export const renderGame = (
+  root: HTMLElement,
+  state: GameState,
+  actions: RenderActions,
+  popupMessage: string | null,
+  phaseLabel: string,
+  phaseInstruction: string,
+): void => {
   root.innerHTML = `
     <main class="app-shell">
       <h1>Fantasy Adventurers Guild — Prototype Scaffold</h1>
-      <section class="panel stage-round"><h2>Stage / Round</h2><div class="stats-row"><span>Stage: <strong>${state.stage}</strong></span><span>Round: <strong>${state.round}</strong></span></div><div class="stats-row"><span>Demon King: <strong>${state.environment.demonKingAppliesThisRound ? 'ON' : 'OFF'}</strong></span><span>Overflow: <strong>${state.environment.overflowTriggeredThisRound ? 'YES' : 'NO'}</strong></span></div></section>
+      <section class="panel stage-round"><h2>Current Phase: ${phaseLabel}</h2><p class="hint">${phaseInstruction}</p><div class="stats-row"><span>Stage: <strong>${state.stage}</strong></span><span>Round: <strong>${state.round}</strong></span></div></section>
       <section class="panel"><h2>Hire Resolution</h2><button data-action="lock-offers" ${state.hiring.offersLocked || state.poaching.pending ? 'disabled' : ''}>Lock Offers / Start Hiring</button>${renderHiringResolutionPanel(state)}</section>
       <section class="panel"><h2>Ranger Poaching</h2>${renderPendingPoachPanel(state)}</section>
-      ${state.poaching.pending ? '<section class="panel"><p><strong>Poach pending:</strong> resolve Match/Decline before other actions.</p></section>' : ''}
       <section class="panel hero-village"><h2>Hero Village (Public Pool)</h2><ul class="hero-list">${state.heroVillageHeroIds.map((heroId) => `<li><strong>${getHeroName(state, heroId)}</strong></li>`).join('')}</ul></section>
       ${renderMissionBoard(state)}
       <section class="panel world-map"><h2>World Map</h2><button data-action="advance-world-map" ${state.poaching.pending ? 'disabled' : ''}>Advance World Map</button><div class="zones-grid">${state.worldMap.map((zone) => renderZone(state, zone)).join('')}</div></section>
       <section class="players-grid">${renderPlayerMat(state, 'p1')}${renderPlayerMat(state, 'p2')}</section>
+      ${
+        popupMessage
+          ? `<section class="modal-backdrop"><div class="modal-card"><p>${popupMessage}</p><button data-action="dismiss-popup">OK</button></div></section>`
+          : ''
+      }
     </main>
   `;
 

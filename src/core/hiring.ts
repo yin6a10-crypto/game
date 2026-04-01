@@ -34,16 +34,16 @@ export const HIRING_ROW_ORDER: HiringRowKey[] = [
 ];
 
 export const HIRING_ROW_DEFS: HiringRowDefinition[] = [
-  { key: 'Warrior-1', heroClass: HeroClass.Warrior, level: 1, minWage: 1, currency: 'silver' },
-  { key: 'Warrior-2', heroClass: HeroClass.Warrior, level: 2, minWage: 2, currency: 'silver' },
-  { key: 'Warrior-3', heroClass: HeroClass.Warrior, level: 3, minWage: 3, currency: 'silver' },
-  { key: 'Mage-1', heroClass: HeroClass.Mage, level: 1, minWage: 1, currency: 'gems' },
-  { key: 'Mage-2', heroClass: HeroClass.Mage, level: 2, minWage: 2, currency: 'gems' },
-  { key: 'Mage-3', heroClass: HeroClass.Mage, level: 3, minWage: 3, currency: 'gems' },
-  { key: 'Ranger-1', heroClass: HeroClass.Ranger, level: 1, minWage: 1, currency: 'silver' },
-  { key: 'Ranger-2', heroClass: HeroClass.Ranger, level: 2, minWage: 2, currency: 'silver' },
-  { key: 'Priest-1', heroClass: HeroClass.Priest, level: 1, minWage: 1, currency: 'silver' },
-  { key: 'Priest-2', heroClass: HeroClass.Priest, level: 2, minWage: 2, currency: 'silver' },
+  { key: 'Warrior-1', heroClass: HeroClass.Warrior, level: 1, minWage: 0, currency: 'silver' },
+  { key: 'Warrior-2', heroClass: HeroClass.Warrior, level: 2, minWage: 1, currency: 'silver' },
+  { key: 'Warrior-3', heroClass: HeroClass.Warrior, level: 3, minWage: 2, currency: 'silver' },
+  { key: 'Mage-1', heroClass: HeroClass.Mage, level: 1, minWage: 0, currency: 'gems' },
+  { key: 'Mage-2', heroClass: HeroClass.Mage, level: 2, minWage: 1, currency: 'gems' },
+  { key: 'Mage-3', heroClass: HeroClass.Mage, level: 3, minWage: 2, currency: 'gems' },
+  { key: 'Ranger-1', heroClass: HeroClass.Ranger, level: 1, minWage: 0, currency: 'silver' },
+  { key: 'Ranger-2', heroClass: HeroClass.Ranger, level: 2, minWage: 1, currency: 'silver' },
+  { key: 'Priest-1', heroClass: HeroClass.Priest, level: 1, minWage: 0, currency: 'silver' },
+  { key: 'Priest-2', heroClass: HeroClass.Priest, level: 2, minWage: 1, currency: 'silver' },
 ];
 
 export const getHiringRowDefinition = (rowKey: HiringRowKey): HiringRowDefinition => {
