@@ -1,9 +1,15 @@
 import './styles/app.css';
 import {
   createInitialState,
+  declinePendingPoach,
+  departPreparationMission,
+  advanceWorldMap,
+  assignHiredHeroToPreparationMission,
   hireCurrentHero,
   lockOffersAndStartHiring,
+  matchPendingPoach,
   passOnCurrentHire,
+  startRangerPoachAttempt,
   updateHiringExtraPay,
 } from './core/state';
 import { renderGame } from './ui/renderGame';
@@ -33,6 +39,37 @@ const render = (): void => {
     },
     onPass: (playerId) => {
       gameState = passOnCurrentHire(gameState, playerId);
+      render();
+    },
+    onAssignHero: (playerId, heroId, missionId) => {
+      gameState = assignHiredHeroToPreparationMission(gameState, playerId, heroId, missionId);
+      render();
+    },
+    onStartPoach: (toPlayerId, rangerHeroId, fromMissionId, targetMissionId, priceSilver) => {
+      gameState = startRangerPoachAttempt(
+        gameState,
+        toPlayerId,
+        rangerHeroId,
+        fromMissionId,
+        targetMissionId,
+        priceSilver,
+      );
+      render();
+    },
+    onMatchPoach: (playerId) => {
+      gameState = matchPendingPoach(gameState, playerId);
+      render();
+    },
+    onDeclinePoach: (playerId) => {
+      gameState = declinePendingPoach(gameState, playerId);
+      render();
+    },
+    onDepartMission: (playerId, missionId) => {
+      gameState = departPreparationMission(gameState, playerId, missionId);
+      render();
+    },
+    onAdvanceWorldMap: () => {
+      gameState = advanceWorldMap(gameState);
       render();
     },
   });

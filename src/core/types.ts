@@ -92,6 +92,7 @@ export interface PlayerState {
   name: string;
   reputation: Reputation;
   silver: number;
+  gold: number;
   gems: number;
   // Fixed 5-slot track, left=Newest (index 0), right=Oldest (index 4)
   preparationSlots: [PreparationSlot, PreparationSlot, PreparationSlot, PreparationSlot, PreparationSlot];
@@ -104,10 +105,17 @@ export interface PlayerState {
 export interface WorldMapZoneView {
   zone: WorldZone;
   lanes: {
-    oneTurn: MissionId[];
-    twoTurn: MissionId[];
-    threeTurn: MissionId[];
+    oneTurn: WorldMapLaneEntry[];
+    twoTurn: WorldMapLaneEntry[];
+    threeTurn: WorldMapLaneEntry[];
   };
+}
+
+export interface WorldMapLaneEntry {
+  missionId: MissionId;
+  position: number;
+  assignedHeroIds: HeroId[];
+  enteredStep: number;
 }
 
 export interface EnvironmentFlags {
@@ -128,6 +136,23 @@ export interface HiringPhaseState {
   resolutionOrder: HiringResolutionItem[];
 }
 
+export interface MissionAssignmentState {
+  assignedHeroIdsByMission: Record<MissionId, HeroId[]>;
+}
+
+export interface PendingPoach {
+  rangerHeroId: HeroId;
+  fromPlayerId: PlayerId;
+  toPlayerId: PlayerId;
+  fromMissionId: MissionId;
+  targetMissionId: MissionId;
+  priceSilver: number;
+}
+
+export interface PoachingState {
+  pending: PendingPoach | null;
+}
+
 export interface GameState {
   stage: MissionStage;
   round: number;
@@ -140,4 +165,7 @@ export interface GameState {
   players: PlayerState[];
   playerOrder: PlayerId[];
   hiring: HiringPhaseState;
+  assignment: MissionAssignmentState;
+  poaching: PoachingState;
+  worldMapStep: number;
 }

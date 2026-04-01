@@ -7,6 +7,10 @@ import {
   getCurrentResolutionItem,
   isPriestUnavailableForPlayer,
 } from './hiring';
+import { assignHeroToMission } from './assignment';
+import { canPayExactPoachValue, createPoachAttempt, isPoachStillResolvable, payExactPoachValue } from './poaching';
+import { departMissionToWorldMap } from './departure';
+import { advanceWorldMapStep } from './worldMap';
 
 export const createInitialState = (): GameState => {
   return structuredClone(seedState);
@@ -61,6 +65,7 @@ export const updateHiringExtraPay = (
   rowKey: HiringRowKey,
   delta: 1 | -1,
 ): GameState => {
+  if (state.poaching.pending) return state;
   if (state.hiring.offersLocked) return state;
 
   return {
@@ -78,6 +83,7 @@ export const updateHiringExtraPay = (
 };
 
 export const lockOffersAndStartHiring = (state: GameState): GameState => {
+  if (state.poaching.pending) return state;
   if (state.hiring.offersLocked) return state;
 
   const resolutionOrder = buildHiringResolutionOrder(state);
@@ -120,6 +126,7 @@ const markCurrentResolutionAdvanced = (state: GameState): GameState => {
 };
 
 export const passOnCurrentHire = (state: GameState, playerId: PlayerId): GameState => {
+  if (state.poaching.pending) return state;
   const currentItem = getCurrentResolutionItem(state);
   if (!currentItem) return state;
 
@@ -130,6 +137,7 @@ export const passOnCurrentHire = (state: GameState, playerId: PlayerId): GameSta
 };
 
 export const hireCurrentHero = (state: GameState, playerId: PlayerId): GameState => {
+  if (state.poaching.pending) return state;
   const currentItem = getCurrentResolutionItem(state);
   if (!currentItem) return state;
 
@@ -162,4 +170,97 @@ export const hireCurrentHero = (state: GameState, playerId: PlayerId): GameState
       ),
     },
   };
+};
+
+export const assignHiredHeroToPreparationMission = (
+  state: GameState,
+  playerId: PlayerId,
+  heroId: HeroId,
+  missionId: MissionId,
+): GameState => {
+  if (state.poaching.pending) return state;
+  return assignHeroToMission(state, playerId, heroId, missionId);
+};
+
+export const startRangerPoachAttempt = (
+  state: GameState,
+  toPlayerId: PlayerId,
+  rangerHeroId: HeroId,
+  fromMissionId: MissionId,
+  targetMissionId: MissionId,
+  priceSilver: number,
+): GameState => {
+  if (state.poaching.pending) return state;
+  const pending = createPoachAttempt(state, toPlayerId, rangerHeroId, fromMissionId, targetMissionId, priceSilver);
+  if (!pending) return state;
+
+  return {
+    ...state,
+    poaching: { pending },
+  };
+};
+
+export const matchPendingPoach = (state: GameState, playerId: PlayerId): GameState => {
+  const pending = state.poaching.pending;
+  if (!pending) return state;
+  if (pending.fromPlayerId !== playerId) return state;
+  if (!isPoachStillResolvable(state, pending)) return { ...state, poaching: { pending: null } };
+
+  const owner = state.players.find((player) => player.id === pending.fromPlayerId);
+  if (!owner) return state;
+  if (!canPayExactPoachValue(owner.silver, owner.gold, pending.priceSilver)) return state;
+  const paid = payExactPoachValue(owner.silver, owner.gold, pending.priceSilver);
+  if (!paid) return state;
+
+  return {
+    ...state,
+    players: state.players.map((player) =>
+      player.id === owner.id ? { ...player, silver: paid.silver, gold: paid.gold } : player,
+    ),
+    poaching: { pending: null },
+  };
+};
+
+export const declinePendingPoach = (state: GameState, playerId: PlayerId): GameState => {
+  const pending = state.poaching.pending;
+  if (!pending) return state;
+  if (pending.fromPlayerId !== playerId) return state;
+  if (!isPoachStillResolvable(state, pending)) return { ...state, poaching: { pending: null } };
+
+  const poacher = state.players.find((player) => player.id === pending.toPlayerId);
+  if (!poacher) return state;
+  if (!canPayExactPoachValue(poacher.silver, poacher.gold, pending.priceSilver)) return state;
+  const paid = payExactPoachValue(poacher.silver, poacher.gold, pending.priceSilver);
+  if (!paid) return state;
+
+  return {
+    ...state,
+    players: state.players.map((player) =>
+      player.id === poacher.id ? { ...player, silver: paid.silver, gold: paid.gold } : player,
+    ),
+    assignment: {
+      ...state.assignment,
+      assignedHeroIdsByMission: {
+        ...state.assignment.assignedHeroIdsByMission,
+        [pending.fromMissionId]: (state.assignment.assignedHeroIdsByMission[pending.fromMissionId] ?? []).filter(
+          (heroId) => heroId !== pending.rangerHeroId,
+        ),
+        [pending.targetMissionId]: [
+          ...(state.assignment.assignedHeroIdsByMission[pending.targetMissionId] ?? []),
+          pending.rangerHeroId,
+        ],
+      },
+    },
+    poaching: { pending: null },
+  };
+};
+
+export const departPreparationMission = (state: GameState, playerId: PlayerId, missionId: MissionId): GameState => {
+  if (state.poaching.pending) return state;
+  return departMissionToWorldMap(state, playerId, missionId);
+};
+
+export const advanceWorldMap = (state: GameState): GameState => {
+  if (state.poaching.pending) return state;
+  return advanceWorldMapStep(state);
 };
