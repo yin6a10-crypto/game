@@ -32,6 +32,9 @@ interface RenderActions {
   onDeclinePoach: (playerId: string) => void;
   onDepartMission: (playerId: string, missionId: string) => void;
   onAdvanceWorldMap: () => void;
+  onAcceptMission: (playerId: string, missionId: string) => void;
+  onResolveMission: (missionId: string) => void;
+  onContinuePhase: () => void;
   onDismissPopup: () => void;
 }
 
@@ -149,16 +152,36 @@ const attachActionButtons = (root: HTMLElement, actions: RenderActions): void =>
       actions.onDismissPopup();
     });
   });
+
+  root.querySelectorAll<HTMLElement>('[data-action="accept-mission"]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const playerId = button.dataset.playerId;
+      const missionId = button.dataset.missionId;
+      if (!playerId || !missionId) return;
+      actions.onAcceptMission(playerId, missionId);
+    });
+  });
+
+  root.querySelectorAll<HTMLElement>('[data-action="resolve-mission"]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const missionId = button.dataset.missionId;
+      if (!missionId) return;
+      actions.onResolveMission(missionId);
+    });
+  });
+
+  root.querySelectorAll<HTMLElement>('[data-action="continue-phase"]').forEach((button) => {
+    button.addEventListener('click', () => actions.onContinuePhase());
+  });
 };
 
-const renderPreparationSlots = (state: GameState, player: PlayerState): string => {
+const renderPreparationSlots = (state: GameState, player: PlayerState, phaseLabel: string): string => {
   return `
     <div class="prep-slots">
       ${player.preparationSlots
         .map((missionId, index) => {
           const marker = index === 0 ? 'Newest' : index === player.preparationSlots.length - 1 ? 'Oldest' : `Slot ${index + 1}`;
           const assignedIds = missionId ? state.assignment.assignedHeroIdsByMission[missionId] ?? [] : [];
-          const assignedNames = assignedIds.length ? assignedIds.map((id) => getHeroName(state, id)).join(', ') : '-';
           const staffed = missionId ? isMissionFullyStaffedByAssignment(state, missionId) : false;
           const assignControls =
             missionId === null
@@ -166,19 +189,17 @@ const renderPreparationSlots = (state: GameState, player: PlayerState): string =
               : `<div class="assign-controls">${player.hiredPoolHeroIds
                   .map((heroId) => {
                     const enabled = canAssignByRules(state, player.id, heroId, missionId);
-                    return `<button data-action="assign-hero" data-player-id="${player.id}" data-hero-id="${heroId}" data-mission-id="${missionId}" ${enabled && !state.poaching.pending ? '' : 'disabled'}>Assign ${getHeroName(state, heroId)}</button>`;
+                    return `<button data-action="assign-hero" data-player-id="${player.id}" data-hero-id="${heroId}" data-mission-id="${missionId}" ${enabled && !state.poaching.pending && phaseLabel === 'Assignment' ? '' : 'disabled'}>Assign ${getHeroName(state, heroId)}</button>`;
                   })
                   .join('')}</div>`;
 
           return `
             <div class="prep-slot">
               <small>${marker}</small>
-              <span>${getMissionTitle(state, missionId)}</span>
-              ${missionId ? `<small>Assigned: ${assignedNames}</small>` : ''}
-              ${missionId ? `<small>Status: ${staffed ? 'Fully Staffed' : 'Needs Roles'}</small>` : ''}
+              ${missionId ? renderMissionCard(state, missionId, staffed ? 'Fully Staffed' : 'Needs Roles', assignedIds) : '<span>Empty</span>'}
               ${
                 missionId && canDepartMission(state, player.id, missionId)
-                  ? `<button data-action="depart-mission" data-player-id="${player.id}" data-mission-id="${missionId}" ${state.poaching.pending ? 'disabled' : ''}>Depart</button>`
+                  ? `<button data-action="depart-mission" data-player-id="${player.id}" data-mission-id="${missionId}" ${state.poaching.pending || phaseLabel !== 'Departure' ? 'disabled' : ''}>Depart</button>`
                   : ''
               }
               ${assignControls}
@@ -190,14 +211,14 @@ const renderPreparationSlots = (state: GameState, player: PlayerState): string =
   `;
 };
 
-const renderHiringRows = (player: PlayerState, offersLocked: boolean, isPoachPending: boolean): string => {
+const renderHiringRows = (player: PlayerState, offersLocked: boolean, isPoachPending: boolean, phaseLabel: string): string => {
   return `
     <div class="hiring-rows">
       ${HIRING_ROW_DEFS.map((row) => {
         const extraPay = player.hiringBoardExtraPay[row.key];
         const actualOffer = getActualOffer(player, row.key);
         const priestBlocked = isPriestUnavailableForPlayer(player, row.key);
-        const controlsDisabled = offersLocked || priestBlocked;
+        const controlsDisabled = offersLocked || priestBlocked || phaseLabel !== 'Guild Hiring';
         const rowClass = priestBlocked ? 'hiring-box disabled-row' : 'hiring-box';
         const currency = row.currency === 'silver' ? 'silver' : 'gem';
         return `
@@ -218,7 +239,7 @@ const renderHiringRows = (player: PlayerState, offersLocked: boolean, isPoachPen
 
 const renderHiredPool = (state: GameState, player: PlayerState): string => `<div><h3>Hired Pool</h3><p>${toHeroNameList(state, player.hiredPoolHeroIds)}</p></div>`;
 
-const renderPoachingPanel = (state: GameState, player: PlayerState): string => {
+const renderPoachingPanel = (state: GameState, player: PlayerState, phaseLabel: string): string => {
   const candidates = getEligibleAssignedRangersForPoaching(state, player.id);
   const targets = getValidRangerTargetMissions(state, player.id);
 
@@ -241,7 +262,7 @@ const renderPoachingPanel = (state: GameState, player: PlayerState): string => {
                       .join('')}</select>
                     <label>Poach price (silver)</label>
                     <input id="${priceId}" type="number" min="1" value="1" />
-                    <button data-action="start-poach" data-to-player-id="${player.id}" data-ranger-hero-id="${candidate.rangerHeroId}" data-from-mission-id="${candidate.fromMissionId}" data-target-select-id="${selectId}" data-price-input-id="${priceId}" ${state.poaching.pending ? 'disabled' : ''}>Start Poach</button>
+                    <button data-action="start-poach" data-to-player-id="${player.id}" data-ranger-hero-id="${candidate.rangerHeroId}" data-from-mission-id="${candidate.fromMissionId}" data-target-select-id="${selectId}" data-price-input-id="${priceId}" ${state.poaching.pending || phaseLabel !== 'Ranger Poach' ? 'disabled' : ''}>Start Poach</button>
                   </div>
                 `;
               })
@@ -251,7 +272,7 @@ const renderPoachingPanel = (state: GameState, player: PlayerState): string => {
   `;
 };
 
-const renderPendingPoachPanel = (state: GameState): string => {
+const renderPendingPoachPanel = (state: GameState, phaseLabel: string): string => {
   const pending = state.poaching.pending;
   if (!pending) return '<p>No pending poach.</p>';
 
@@ -265,15 +286,15 @@ const renderPendingPoachPanel = (state: GameState): string => {
       <p>Price: ${pending.priceSilver} silver</p>
       <p>Original owner: ${owner?.name ?? pending.fromPlayerId}</p>
       <div class="resolution-actions">
-        <button data-action="match-poach" data-player-id="${pending.fromPlayerId}" ${canMatch ? '' : 'disabled'}>Match</button>
-        <button data-action="decline-poach" data-player-id="${pending.fromPlayerId}">Decline</button>
+        <button data-action="match-poach" data-player-id="${pending.fromPlayerId}" ${canMatch && phaseLabel === 'Ranger Poach' ? '' : 'disabled'}>Match</button>
+        <button data-action="decline-poach" data-player-id="${pending.fromPlayerId}" ${phaseLabel === 'Ranger Poach' ? '' : 'disabled'}>Decline</button>
       </div>
       ${canMatch ? '' : '<p class="warning">Original owner cannot afford match.</p>'}
     </div>
   `;
 };
 
-const renderHiringResolutionPanel = (state: GameState): string => {
+const renderHiringResolutionPanel = (state: GameState, phaseLabel: string): string => {
   const current = getCurrentResolutionItem(state);
   if (!state.hiring.offersLocked) return '<p>Offers not locked yet.</p>';
   if (!current) return '<p>Hiring resolution complete.</p>';
@@ -292,21 +313,51 @@ const renderHiringResolutionPanel = (state: GameState): string => {
       <p><strong>Row:</strong> ${row.heroClass} Lv.${row.level}</p>
       <p><strong>Current Priority:</strong> ${activePlayer ? activePlayer.name : activePlayerId}</p>
       <div class="resolution-actions">
-        <button data-action="hire" data-player-id="${activePlayerId}" ${hireDisabled || state.poaching.pending ? 'disabled' : ''}>Hire</button>
-        <button data-action="pass" data-player-id="${activePlayerId}" ${state.poaching.pending ? 'disabled' : ''}>Pass</button>
+        <button data-action="hire" data-player-id="${activePlayerId}" ${hireDisabled || state.poaching.pending || phaseLabel !== 'Hire Resolution' ? 'disabled' : ''}>Hire</button>
+        <button data-action="pass" data-player-id="${activePlayerId}" ${state.poaching.pending || phaseLabel !== 'Hire Resolution' ? 'disabled' : ''}>Pass</button>
       </div>
     </div>
   `;
 };
 
-const renderMissionBoard = (state: GameState): string => {
+const renderMissionCard = (
+  state: GameState,
+  missionId: MissionId,
+  status: string,
+  assignedHeroIds: HeroId[] = [],
+): string => {
+  const mission = state.missions.find((entry) => entry.id === missionId);
+  if (!mission) return `<div class="mission-card">Unknown mission</div>`;
+  const requiredRoles = mission.requirements.requiredExact.map((req) => `${req.heroClass} Lv.${req.level}`).join(', ') || '-';
+  const optionalPriest = (mission.requirements.optionalPriestLevels ?? []).length
+    ? (mission.requirements.optionalPriestLevels ?? []).map((lvl) => `Priest Lv.${lvl}`).join(' / ')
+    : 'None';
+  return `<article class="mission-card">
+    <strong>${mission.title}</strong>
+    <small>Stage ${mission.stage} · ${mission.kind} · ${mission.dangerous ? 'Dangerous' : 'Safe'}</small>
+    <small>Zone ${mission.zone} · ${mission.laneLength}-turn</small>
+    <small>Reward: ${mission.reward.silver}s / ${mission.reward.gems}g${mission.reward.reputation ? ` / ${mission.reward.reputation} rep` : ''}</small>
+    <small>Required: ${requiredRoles}</small>
+    <small>Optional Priest: ${optionalPriest}</small>
+    <small>Assigned: ${assignedHeroIds.length ? toHeroNameList(state, assignedHeroIds) : '-'}</small>
+    <small>Status: ${status}</small>
+  </article>`;
+};
+
+const renderMissionBoard = (state: GameState, phaseLabel: string): string => {
   const bonus = (i: number): string => (i === 4 ? '+1 Gem' : i === 3 ? '+1 Silver' : '-');
 
   return `
     <section class="panel mission-board">
       <h2>Public Mission Board</h2>
       <div class="mission-slots">${state.missionBoard
-        .map((slot, i) => `<article class="slot-card"><header><span>Slot ${i + 1}</span></header><div class="slot-mission">${getMissionTitle(state, slot.missionId)}</div><div class="slot-bonus">${bonus(i)}</div></article>`)
+        .map((slot, i) => `<article class="slot-card"><header><span>Slot ${i + 1}</span></header>${
+          slot.missionId ? renderMissionCard(state, slot.missionId, 'Needs Roles') : '<div class="slot-mission">Empty</div>'
+        }<div class="slot-bonus">${bonus(i)}</div>${
+          slot.missionId
+            ? `<div class="resolution-actions"><button data-action="accept-mission" data-player-id="p1" data-mission-id="${slot.missionId}" ${phaseLabel === 'Accept Missions' ? '' : 'disabled'}>Accept P1</button><button data-action="accept-mission" data-player-id="p2" data-mission-id="${slot.missionId}" ${phaseLabel === 'Accept Missions' ? '' : 'disabled'}>Accept P2</button></div>`
+            : ''
+        }</article>`)
         .join('')}</div>
     </section>
   `;
@@ -316,20 +367,25 @@ const renderLane = (
   state: GameState,
   entries: WorldMapLaneEntry[],
   laneLength: number,
+  phaseLabel: string,
 ): string => {
   if (entries.length === 0) return '-';
   return entries
     .map(
       (entry) =>
-        `${getMissionTitle(state, entry.missionId)} (pos ${entry.position}) [${toHeroNameList(state, entry.assignedHeroIds)}] — ${isEntryReadyToResolve(entry, laneLength) ? 'Ready to Resolve' : 'Traveling'}`,
+        `${renderMissionCard(state, entry.missionId, isEntryReadyToResolve(entry, laneLength) ? 'Ready to Resolve' : 'Departed', entry.assignedHeroIds)}${
+          isEntryReadyToResolve(entry, laneLength)
+            ? `<button data-action="resolve-mission" data-mission-id="${entry.missionId}" ${phaseLabel === 'Mission Resolution' ? '' : 'disabled'}>Resolve</button>`
+            : ''
+        }`,
     )
-    .join(' | ');
+    .join('');
 };
 
-const renderZone = (state: GameState, zone: WorldMapZoneView): string =>
-  `<article class="zone-card"><h3>${zone.zone}</h3><ul><li><strong>1-turn lane:</strong> ${renderLane(state, zone.lanes.oneTurn, 1)}</li><li><strong>2-turn lane:</strong> ${renderLane(state, zone.lanes.twoTurn, 2)}</li><li><strong>3-turn lane:</strong> ${renderLane(state, zone.lanes.threeTurn, 3)}</li></ul></article>`;
+const renderZone = (state: GameState, zone: WorldMapZoneView, phaseLabel: string): string =>
+  `<article class="zone-card"><h3>${zone.zone}</h3><ul><li><strong>1-turn lane:</strong> ${renderLane(state, zone.lanes.oneTurn, 1, phaseLabel)}</li><li><strong>2-turn lane:</strong> ${renderLane(state, zone.lanes.twoTurn, 2, phaseLabel)}</li><li><strong>3-turn lane:</strong> ${renderLane(state, zone.lanes.threeTurn, 3, phaseLabel)}</li></ul></article>`;
 
-const renderPlayerMat = (state: GameState, playerId: string): string => {
+const renderPlayerMat = (state: GameState, playerId: string, phaseLabel: string): string => {
   const player = state.players.find((p) => p.id === playerId);
   if (!player) return '';
 
@@ -338,13 +394,13 @@ const renderPlayerMat = (state: GameState, playerId: string): string => {
       <h2>${player.name} Mat</h2>
       <div class="stats-row"><span>Reputation: <strong>${player.reputation}</strong></span><span>Silver: <strong>${player.silver}</strong></span><span>Gold: <strong>${player.gold}</strong></span><span>Gems: <strong>${player.gems}</strong></span></div>
       <div class="mat-grid">
-        <div><h3>Preparation Area</h3>${renderPreparationSlots(state, player)}</div>
+        <div><h3>Preparation Area</h3>${renderPreparationSlots(state, player, phaseLabel)}</div>
         <div><h3>Rest Zone</h3><p>${toHeroNameList(state, player.restZoneHeroIds)}</p></div>
         <div><h3>Backlog Area</h3><p>${toMissionTitleList(state, player.backlogMissionIds)}</p></div>
         ${renderHiredPool(state, player)}
       </div>
-      <section class="subpanel"><h3>Guild Hiring Board</h3>${renderHiringRows(player, state.hiring.offersLocked, Boolean(state.poaching.pending))}</section>
-      ${renderPoachingPanel(state, player)}
+      <section class="subpanel"><h3>Guild Hiring Board</h3>${renderHiringRows(player, state.hiring.offersLocked, Boolean(state.poaching.pending), phaseLabel)}</section>
+      ${renderPoachingPanel(state, player, phaseLabel)}
     </section>
   `;
 };
@@ -355,18 +411,20 @@ export const renderGame = (
   actions: RenderActions,
   popupMessage: string | null,
   phaseLabel: string,
+  actingPlayer: string,
   phaseInstruction: string,
+  canContinue: boolean,
 ): void => {
   root.innerHTML = `
     <main class="app-shell">
       <h1>Fantasy Adventurers Guild — Prototype Scaffold</h1>
-      <section class="panel stage-round"><h2>Current Phase: ${phaseLabel}</h2><p class="hint">${phaseInstruction}</p><div class="stats-row"><span>Stage: <strong>${state.stage}</strong></span><span>Round: <strong>${state.round}</strong></span></div></section>
-      <section class="panel"><h2>Hire Resolution</h2><button data-action="lock-offers" ${state.hiring.offersLocked || state.poaching.pending ? 'disabled' : ''}>Lock Offers / Start Hiring</button>${renderHiringResolutionPanel(state)}</section>
-      <section class="panel"><h2>Ranger Poaching</h2>${renderPendingPoachPanel(state)}</section>
+      <section class="panel stage-round"><h2>Current Phase: ${phaseLabel}</h2><p><strong>Acting:</strong> ${actingPlayer}</p><p class="hint">${phaseInstruction}</p><div class="stats-row"><span>Stage: <strong>${state.stage}</strong></span><span>Round: <strong>${state.round}</strong></span></div><button data-action="continue-phase" ${canContinue ? '' : 'disabled'}>Next Step / Continue</button></section>
+      <section class="panel"><h2>Hire Resolution</h2><button data-action="lock-offers" ${state.hiring.offersLocked || state.poaching.pending || phaseLabel !== 'Guild Hiring' ? 'disabled' : ''}>Lock Offers / Start Hiring</button>${renderHiringResolutionPanel(state, phaseLabel)}</section>
+      <section class="panel"><h2>Ranger Poaching</h2>${renderPendingPoachPanel(state, phaseLabel)}</section>
       <section class="panel hero-village"><h2>Hero Village (Public Pool)</h2><ul class="hero-list">${state.heroVillageHeroIds.map((heroId) => `<li><strong>${getHeroName(state, heroId)}</strong></li>`).join('')}</ul></section>
-      ${renderMissionBoard(state)}
-      <section class="panel world-map"><h2>World Map</h2><button data-action="advance-world-map" ${state.poaching.pending ? 'disabled' : ''}>Advance World Map</button><div class="zones-grid">${state.worldMap.map((zone) => renderZone(state, zone)).join('')}</div></section>
-      <section class="players-grid">${renderPlayerMat(state, 'p1')}${renderPlayerMat(state, 'p2')}</section>
+      ${renderMissionBoard(state, phaseLabel)}
+      <section class="panel world-map"><h2>World Map</h2><button data-action="advance-world-map" ${state.poaching.pending || phaseLabel !== 'World Map Advance' ? 'disabled' : ''}>Advance World Map</button><div class="zones-grid">${state.worldMap.map((zone) => renderZone(state, zone, phaseLabel)).join('')}</div></section>
+      <section class="players-grid">${renderPlayerMat(state, 'p1', phaseLabel)}${renderPlayerMat(state, 'p2', phaseLabel)}</section>
       ${
         popupMessage
           ? `<section class="modal-backdrop"><div class="modal-card"><p>${popupMessage}</p><button data-action="dismiss-popup">OK</button></div></section>`

@@ -80,6 +80,15 @@ p {
   background: #f8fafc;
 }
 
+.mission-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+  display: grid;
+  gap: 3px;
+}
+
 .slot-card header {
   display: flex;
   justify-content: space-between;
