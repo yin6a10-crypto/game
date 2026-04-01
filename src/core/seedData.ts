@@ -141,7 +141,7 @@ const players: PlayerState[] = [
     reputation: 2,
     silver: 8,
     gems: 3,
-    preparationSlots: ['m-forest-trail', null, null, null, null],
+    preparationSlots: ['m-marsh-lights', null, null, null, null],
     restZoneHeroIds: ['h-warrior-1', 'h-ranger-1'],
     hiredPoolHeroIds: [],
     backlogMissionIds: [],
@@ -153,18 +153,18 @@ const players: PlayerState[] = [
     reputation: -1,
     silver: 9,
     gems: 2,
-    preparationSlots: ['m-cursed-bell', 'm-marsh-lights', null, null, null],
+    preparationSlots: ['m-fallen-gate', null, null, null, null],
     restZoneHeroIds: ['h-mage-2', 'h-priest-1'],
     hiredPoolHeroIds: [],
-    backlogMissionIds: ['m-marsh-lights'],
+    backlogMissionIds: [],
     hiringBoardExtraPay: createEmptyHiringBoardExtraPay(),
   },
 ];
 
 const worldMap: WorldMapZoneView[] = [
-  { zone: WorldZone.ZoneA, lanes: { oneTurn: ['m-fallen-gate'], twoTurn: ['m-crypt-echo'], threeTurn: [] } },
+  { zone: WorldZone.ZoneA, lanes: { oneTurn: [], twoTurn: [], threeTurn: [] } },
   { zone: WorldZone.ZoneB, lanes: { oneTurn: [], twoTurn: [], threeTurn: [] } },
-  { zone: WorldZone.ZoneC, lanes: { oneTurn: [], twoTurn: [], threeTurn: ['m-cursed-bell'] } },
+  { zone: WorldZone.ZoneC, lanes: { oneTurn: [], twoTurn: [], threeTurn: [] } },
   { zone: WorldZone.ZoneD, lanes: { oneTurn: [], twoTurn: [], threeTurn: [] } },
 ];
 
@@ -181,9 +181,9 @@ export const seedState: GameState = {
   missionBoard: [
     { index: 0, missionId: 'm-forest-trail' },
     { index: 1, missionId: 'm-cursed-bell' },
-    { index: 2, missionId: 'm-marsh-lights' },
-    { index: 3, missionId: 'm-crypt-echo' },
-    { index: 4, missionId: 'm-fallen-gate' },
+    { index: 2, missionId: 'm-crypt-echo' },
+    { index: 3, missionId: null },
+    { index: 4, missionId: null },
   ],
   worldMap,
   players,

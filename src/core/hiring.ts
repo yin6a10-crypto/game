@@ -136,7 +136,12 @@ export const buildHiringResolutionOrder = (state: GameState): HiringResolutionIt
 
     rowHeroIds.forEach((heroId) => {
       const hero = getHeroById(state, heroId);
-      const ranked = [...state.players]
+      const eligiblePlayers = state.players.filter((player) => {
+        if (!rowKey.startsWith('Priest-')) return true;
+        return player.reputation >= 0;
+      });
+
+      const ranked = [...eligiblePlayers]
         .sort((a, b) => {
           const offerA = getOfferForPlayerRow(a, rowKey);
           const offerB = getOfferForPlayerRow(b, rowKey);

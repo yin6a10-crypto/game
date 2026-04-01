@@ -231,15 +231,15 @@ const renderMissionBoard = (state: GameState): string => {
       <p class="hint">Left = newest, Right = oldest</p>
       <div class="mission-slots">
         ${state.missionBoard
-          .map((slot) => {
+          .map((slot, position) => {
             const missionTitle = getMissionTitle(state, slot.missionId);
-            const positionLabel = getMissionBoardPositionLabel(slot.index, totalSlots);
-            const bonusLabel = getMissionBoardBonusLabel(slot.index, totalSlots);
+            const positionLabel = getMissionBoardPositionLabel(position, totalSlots);
+            const bonusLabel = getMissionBoardBonusLabel(position, totalSlots);
 
             return `
               <article class="slot-card">
                 <header>
-                  <span>Slot ${slot.index + 1}</span>
+                  <span>Slot ${position + 1}</span>
                   <small>${positionLabel}</small>
                 </header>
                 <div class="slot-mission">${missionTitle}</div>

@@ -28,7 +28,7 @@ const compressPreparationSlots = (slots: PlayerState['preparationSlots']): Missi
 
 export const insertMissionIntoPreparationArea = (player: PlayerState, missionId: MissionId): PlayerState => {
   const compact = compressPreparationSlots(player.preparationSlots);
-  const next = [missionId, ...compact];
+  const next: Array<MissionId | null> = [missionId, ...compact];
   const overflowed = next.length > PREPARATION_SLOT_COUNT;
   const nextSlots = next.slice(0, PREPARATION_SLOT_COUNT);
 
