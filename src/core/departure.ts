@@ -39,7 +39,7 @@ export const departMissionToWorldMap = (state: GameState, playerId: PlayerId, mi
           ...zoneView,
           lanes: {
             ...zoneView.lanes,
-            oneTurn: [...zoneView.lanes.oneTurn, { missionId, position: 0, assignedHeroIds, enteredStep: state.worldMapStep }],
+            oneTurn: [...zoneView.lanes.oneTurn, { missionId, position: 0, assignedHeroIds, enteredStep: state.worldMapStep, ownerPlayerId: playerId }],
           },
         };
       }
@@ -49,7 +49,7 @@ export const departMissionToWorldMap = (state: GameState, playerId: PlayerId, mi
           ...zoneView,
           lanes: {
             ...zoneView.lanes,
-            twoTurn: [...zoneView.lanes.twoTurn, { missionId, position: 0, assignedHeroIds, enteredStep: state.worldMapStep }],
+            twoTurn: [...zoneView.lanes.twoTurn, { missionId, position: 0, assignedHeroIds, enteredStep: state.worldMapStep, ownerPlayerId: playerId }],
           },
         };
       }
@@ -58,7 +58,7 @@ export const departMissionToWorldMap = (state: GameState, playerId: PlayerId, mi
         ...zoneView,
         lanes: {
           ...zoneView.lanes,
-          threeTurn: [...zoneView.lanes.threeTurn, { missionId, position: 0, assignedHeroIds, enteredStep: state.worldMapStep }],
+          threeTurn: [...zoneView.lanes.threeTurn, { missionId, position: 0, assignedHeroIds, enteredStep: state.worldMapStep, ownerPlayerId: playerId }],
         },
       };
     }),

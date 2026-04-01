@@ -10,7 +10,7 @@ import {
 import { assignHeroToMission } from './assignment';
 import { canPayExactPoachValue, createPoachAttempt, isPoachStillResolvable, payExactPoachValue } from './poaching';
 import { departMissionToWorldMap } from './departure';
-import { advanceWorldMapStep } from './worldMap';
+import { advanceWorldMapStep, isEntryReadyToResolve } from './worldMap';
 
 export const createInitialState = (): GameState => {
   return structuredClone(seedState);
@@ -182,6 +182,21 @@ export const assignHiredHeroToPreparationMission = (
   return assignHeroToMission(state, playerId, heroId, missionId);
 };
 
+export const acceptMissionFromBoard = (state: GameState, playerId: PlayerId, missionId: MissionId): GameState => {
+  if (state.poaching.pending) return state;
+  const player = state.players.find((entry) => entry.id === playerId);
+  if (!player) return state;
+  if (!state.missionBoard.some((slot) => slot.missionId === missionId)) return state;
+
+  return {
+    ...state,
+    missionBoard: state.missionBoard.map((slot) => (slot.missionId === missionId ? { ...slot, missionId: null } : slot)),
+    players: state.players.map((entry) =>
+      entry.id === playerId ? insertMissionIntoPreparationArea(entry, missionId) : entry,
+    ),
+  };
+};
+
 export const startRangerPoachAttempt = (
   state: GameState,
   toPlayerId: PlayerId,
@@ -263,4 +278,61 @@ export const departPreparationMission = (state: GameState, playerId: PlayerId, m
 export const advanceWorldMap = (state: GameState): GameState => {
   if (state.poaching.pending) return state;
   return advanceWorldMapStep(state);
+};
+
+export const resolveReadyMissionDemo = (state: GameState, missionId: MissionId): GameState => {
+  if (state.poaching.pending) return state;
+
+  let laneLength: 1 | 2 | 3 | null = null;
+  let ownerPlayerId: PlayerId | null = null;
+  let assignedHeroIds: HeroId[] = [];
+
+  for (const zone of state.worldMap) {
+    const laneDefs: Array<{ entries: typeof zone.lanes.oneTurn; len: 1 | 2 | 3 }> = [
+      { entries: zone.lanes.oneTurn, len: 1 },
+      { entries: zone.lanes.twoTurn, len: 2 },
+      { entries: zone.lanes.threeTurn, len: 3 },
+    ];
+    for (const lane of laneDefs) {
+      const found = lane.entries.find((entry) => entry.missionId === missionId);
+      if (found) {
+        laneLength = lane.len;
+        ownerPlayerId = (found as typeof found & { ownerPlayerId?: PlayerId }).ownerPlayerId ?? null;
+        assignedHeroIds = found.assignedHeroIds;
+      }
+    }
+  }
+
+  if (!laneLength || !ownerPlayerId) return state;
+  const entry = state.worldMap
+    .flatMap((zone) => [...zone.lanes.oneTurn, ...zone.lanes.twoTurn, ...zone.lanes.threeTurn])
+    .find((item) => item.missionId === missionId);
+  if (!entry || !isEntryReadyToResolve(entry, laneLength)) return state;
+
+  return {
+    ...state,
+    worldMap: state.worldMap.map((zone) => ({
+      ...zone,
+      lanes: {
+        oneTurn: zone.lanes.oneTurn.filter((item) => item.missionId !== missionId),
+        twoTurn: zone.lanes.twoTurn.filter((item) => item.missionId !== missionId),
+        threeTurn: zone.lanes.threeTurn.filter((item) => item.missionId !== missionId),
+      },
+    })),
+    assignment: {
+      ...state.assignment,
+      assignedHeroIdsByMission: {
+        ...state.assignment.assignedHeroIdsByMission,
+        [missionId]: [],
+      },
+    },
+    players: state.players.map((player) =>
+      player.id !== ownerPlayerId
+        ? player
+        : {
+            ...player,
+            restZoneHeroIds: [...player.restZoneHeroIds, ...assignedHeroIds.filter((id) => !player.restZoneHeroIds.includes(id))],
+          },
+    ),
+  };
 };

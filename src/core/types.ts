@@ -116,6 +116,7 @@ export interface WorldMapLaneEntry {
   position: number;
   assignedHeroIds: HeroId[];
   enteredStep: number;
+  ownerPlayerId: PlayerId;
 }
 
 export interface EnvironmentFlags {

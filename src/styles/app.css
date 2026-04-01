@@ -80,6 +80,15 @@ p {
   background: #f8fafc;
 }
 
+.mission-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 8px;
+  display: grid;
+  gap: 3px;
+}
+
 .slot-card header {
   display: flex;
   justify-content: space-between;
@@ -139,21 +148,25 @@ p {
 
 .hiring-rows {
   display: grid;
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
 }
 
-.hiring-row {
+.hiring-box {
   display: grid;
-  grid-template-columns: 1.4fr repeat(3, 1fr) auto;
-  gap: 8px;
-  align-items: center;
+  gap: 6px;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  padding: 6px;
+  padding: 8px;
+  background: #f8fafc;
 }
 
 .hiring-row-name {
   font-weight: 600;
+}
+
+.hiring-pay {
+  font-size: 0.92rem;
 }
 
 .hiring-row-controls {
@@ -191,13 +204,17 @@ p {
 }
 
 .prep-slot {
-  border: 1px solid #cbd5e1;
+  border: 2px solid #94a3b8;
   border-radius: 6px;
   background: #f8fafc;
-  min-height: 100px;
+  min-height: 180px;
   padding: 4px 6px;
   display: grid;
   gap: 4px;
+}
+
+.prep-area {
+  border: 2px solid #64748b !important;
 }
 
 .prep-slot small {
@@ -220,6 +237,26 @@ p {
   margin-top: 6px;
   display: grid;
   gap: 4px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.5);
+  display: grid;
+  place-items: center;
+  z-index: 20;
+}
+
+.modal-card {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 16px;
+  max-width: 420px;
+  width: calc(100% - 32px);
+  display: grid;
+  gap: 12px;
 }
 
 @media (max-width: 900px) {
