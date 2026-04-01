@@ -9,6 +9,7 @@ import {
   WorldMapZoneView,
   WorldZone,
 } from './types';
+import { createEmptyHiringBoardExtraPay } from './hiring';
 
 const heroes: Hero[] = [
   {
@@ -142,7 +143,9 @@ const players: PlayerState[] = [
     gems: 3,
     preparationSlots: ['m-forest-trail', null, null, null, null],
     restZoneHeroIds: ['h-warrior-1', 'h-ranger-1'],
+    hiredPoolHeroIds: [],
     backlogMissionIds: [],
+    hiringBoardExtraPay: createEmptyHiringBoardExtraPay(),
   },
   {
     id: 'p2',
@@ -152,7 +155,9 @@ const players: PlayerState[] = [
     gems: 2,
     preparationSlots: ['m-cursed-bell', 'm-marsh-lights', null, null, null],
     restZoneHeroIds: ['h-mage-2', 'h-priest-1'],
+    hiredPoolHeroIds: [],
     backlogMissionIds: ['m-marsh-lights'],
+    hiringBoardExtraPay: createEmptyHiringBoardExtraPay(),
   },
 ];
 
@@ -182,4 +187,9 @@ export const seedState: GameState = {
   ],
   worldMap,
   players,
+  playerOrder: ['p1', 'p2'],
+  hiring: {
+    offersLocked: false,
+    resolutionOrder: [],
+  },
 };

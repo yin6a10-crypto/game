@@ -2,6 +2,17 @@ export type PlayerId = string;
 export type HeroId = string;
 export type MissionId = string;
 export type PreparationSlot = MissionId | null;
+export type HiringRowKey =
+  | 'Warrior-1'
+  | 'Warrior-2'
+  | 'Warrior-3'
+  | 'Mage-1'
+  | 'Mage-2'
+  | 'Mage-3'
+  | 'Ranger-1'
+  | 'Ranger-2'
+  | 'Priest-1'
+  | 'Priest-2';
 
 export enum HeroClass {
   Warrior = 'Warrior',
@@ -85,7 +96,9 @@ export interface PlayerState {
   // Fixed 5-slot track, left=Newest (index 0), right=Oldest (index 4)
   preparationSlots: [PreparationSlot, PreparationSlot, PreparationSlot, PreparationSlot, PreparationSlot];
   restZoneHeroIds: HeroId[];
+  hiredPoolHeroIds: HeroId[];
   backlogMissionIds: MissionId[];
+  hiringBoardExtraPay: Record<HiringRowKey, number>;
 }
 
 export interface WorldMapZoneView {
@@ -102,6 +115,19 @@ export interface EnvironmentFlags {
   overflowTriggeredThisRound: boolean;
 }
 
+export interface HiringResolutionItem {
+  heroId: HeroId;
+  rowKey: HiringRowKey;
+  priorityPlayerIds: PlayerId[];
+  currentPriorityIndex: number;
+  resolved: boolean;
+}
+
+export interface HiringPhaseState {
+  offersLocked: boolean;
+  resolutionOrder: HiringResolutionItem[];
+}
+
 export interface GameState {
   stage: MissionStage;
   round: number;
@@ -112,4 +138,6 @@ export interface GameState {
   missionBoard: BoardSlot[];
   worldMap: WorldMapZoneView[];
   players: PlayerState[];
+  playerOrder: PlayerId[];
+  hiring: HiringPhaseState;
 }

@@ -132,6 +132,58 @@ p {
   padding: 8px;
 }
 
+.subpanel {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 8px;
+}
+
+.hiring-rows {
+  display: grid;
+  gap: 6px;
+}
+
+.hiring-row {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.hiring-row-name {
+  font-weight: 600;
+}
+
+.hiring-row-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.disabled-row {
+  opacity: 0.6;
+  background: #f9fafb;
+}
+
+.resolution-panel {
+  margin-top: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.resolution-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.warning {
+  color: #b45309;
+}
+
 .prep-slots {
   display: grid;
   grid-template-columns: repeat(5, minmax(70px, 1fr));
