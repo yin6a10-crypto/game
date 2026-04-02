@@ -59,6 +59,11 @@ const toHeroNameList = (state: GameState, heroIds: HeroId[]): string => {
   return heroIds.length ? heroIds.map((id) => getHeroName(state, id)).join(', ') : '-';
 };
 
+const renderHeroTokens = (state: GameState, heroIds: HeroId[]): string => {
+  if (heroIds.length === 0) return '<span>-</span>';
+  return heroIds.map((id) => `<span class="hero-token">${getHeroName(state, id)}</span>`).join('');
+};
+
 const attachActionButtons = (root: HTMLElement, actions: RenderActions): void => {
   root.querySelectorAll<HTMLElement>('[data-action="adjust-extra-pay"]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -242,7 +247,7 @@ const renderHiringRows = (player: PlayerState, offersLocked: boolean, isPoachPen
   `;
 };
 
-const renderHiredPool = (state: GameState, player: PlayerState): string => `<div><h3>Hired Pool</h3><p>${toHeroNameList(state, player.hiredPoolHeroIds)}</p></div>`;
+const renderHiredPool = (state: GameState, player: PlayerState): string => `<div><h3>Hired Pool</h3><div class="hero-token-row">${renderHeroTokens(state, player.hiredPoolHeroIds)}</div></div>`;
 
 const renderPoachingPanel = (state: GameState, player: PlayerState, phaseLabel: string): string => {
   const candidates = getEligibleAssignedRangersForPoaching(state, player.id);
@@ -400,7 +405,7 @@ const renderPlayerMat = (state: GameState, playerId: string, phaseLabel: string)
       <h2>${player.name} Mat</h2>
       <div class="stats-row"><span>Reputation: <strong>${player.reputation}</strong></span><span>Silver: <strong>${player.silver}</strong></span><span>Gold: <strong>${player.gold}</strong></span><span>Gems: <strong>${player.gems}</strong></span></div>
       <div class="mat-grid">
-        <div><h3>Rest Zone</h3><p>${toHeroNameList(state, player.restZoneHeroIds)}</p></div>
+        <div><h3>Rest Zone</h3><div class="hero-token-row">${renderHeroTokens(state, player.restZoneHeroIds)}</div></div>
         <div class="prep-area"><h3>Preparation Area</h3>${renderPreparationSlots(state, player, phaseLabel)}</div>
         ${renderHiredPool(state, player)}
       </div>
@@ -429,7 +434,7 @@ export const renderGame = (
       <section class="panel stage-round"><h2>Current Phase: ${phaseLabel}</h2><p><strong>Acting:</strong> ${actingPlayer}</p><p class="hint">${phaseInstruction}</p><div class="stats-row"><span>Stage: <strong>${state.stage}</strong></span><span>Round: <strong>${state.round}</strong></span><span>Stage 1 Remaining: <strong>${deckCounts.stage1}</strong></span><span>Stage 2 Remaining: <strong>${deckCounts.stage2}</strong></span><span>Stage 3 Remaining: <strong>${deckCounts.stage3}</strong></span></div><button data-action="continue-phase" ${canContinue ? '' : 'disabled'}>${setupPhase ? 'Start Game Setup' : 'Next Step / Continue'}</button></section>
       <section class="panel"><h2>Hire Resolution</h2><button data-action="lock-offers" ${state.hiring.offersLocked || state.poaching.pending || phaseLabel !== 'Guild Hiring' ? 'disabled' : ''}>Lock Offers / Start Hiring</button>${renderHiringResolutionPanel(state, phaseLabel)}</section>
       <section class="panel"><h2>Ranger Poaching</h2>${renderPendingPoachPanel(state, phaseLabel)}</section>
-      <section class="panel hero-village"><h2>Hero Village (Public Pool)</h2><ul class="hero-list">${state.heroVillageHeroIds.map((heroId) => `<li><strong>${getHeroName(state, heroId)}</strong></li>`).join('')}</ul></section>
+      <section class="panel hero-village"><h2>Hero Village (Public Pool)</h2><div class="hero-token-row">${renderHeroTokens(state, state.heroVillageHeroIds)}</div></section>
       ${renderMissionBoard(state, phaseLabel, activeAcceptPlayerId)}
       <section class="panel world-map"><h2>World Map</h2><button data-action="advance-world-map" ${state.poaching.pending || phaseLabel !== 'World Map Advance' ? 'disabled' : ''}>Advance World Map</button><div class="zones-grid">${state.worldMap.map((zone) => renderZone(state, zone, phaseLabel)).join('')}</div></section>
       <section class="players-grid">${renderPlayerMat(state, 'p1', phaseLabel)}${renderPlayerMat(state, 'p2', phaseLabel)}</section>

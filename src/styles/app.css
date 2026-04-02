@@ -60,6 +60,21 @@ p {
   padding: 6px 8px;
 }
 
+.hero-token-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hero-token {
+  border: 1px solid #94a3b8;
+  background: #e2e8f0;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 .hint {
   color: #4b5563;
   font-size: 0.9rem;
@@ -207,7 +222,7 @@ p {
   border: 2px solid #94a3b8;
   border-radius: 6px;
   background: #f8fafc;
-  min-height: 180px;
+  min-height: 240px;
   padding: 4px 6px;
   display: grid;
   gap: 4px;

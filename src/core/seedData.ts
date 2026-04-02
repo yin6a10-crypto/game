@@ -47,6 +47,27 @@ const heroes: Hero[] = [
     level: 3,
     currentRestZonePlayerId: null,
   },
+  {
+    id: 'h-mage-1b',
+    name: 'Lumen',
+    heroClass: HeroClass.Mage,
+    level: 1,
+    currentRestZonePlayerId: null,
+  },
+  {
+    id: 'h-ranger-1b',
+    name: 'Pine',
+    heroClass: HeroClass.Ranger,
+    level: 1,
+    currentRestZonePlayerId: null,
+  },
+  {
+    id: 'h-priest-1b',
+    name: 'Dawn',
+    heroClass: HeroClass.Priest,
+    level: 1,
+    currentRestZonePlayerId: null,
+  },
 ];
 
 const missions: MissionCard[] = [
@@ -131,6 +152,51 @@ const missions: MissionCard[] = [
       optionalPriestLevels: [1, 2],
     },
     reward: { silver: 5, gems: 1 },
+  },
+  {
+    id: 'm-ruin-watch',
+    title: 'Ruin Watch Patrol',
+    stage: MissionStage.Stage1,
+    kind: MissionKind.NonBattle,
+    dangerous: false,
+    zone: WorldZone.ZoneB,
+    laneLength: 1,
+    requirements: {
+      requiredExact: [{ heroClass: HeroClass.Warrior, level: 1 }],
+      optionalPriestLevels: [1],
+    },
+    reward: { silver: 2, gems: 0 },
+  },
+  {
+    id: 'm-moon-archive',
+    title: 'Moon Archive Survey',
+    stage: MissionStage.Stage1,
+    kind: MissionKind.NonBattle,
+    dangerous: false,
+    zone: WorldZone.ZoneC,
+    laneLength: 2,
+    requirements: {
+      requiredExact: [{ heroClass: HeroClass.Mage, level: 1 }],
+      optionalPriestLevels: [1],
+    },
+    reward: { silver: 2, gems: 1 },
+  },
+  {
+    id: 'm-river-ambush',
+    title: 'River Ambush',
+    stage: MissionStage.Stage1,
+    kind: MissionKind.Battle,
+    dangerous: true,
+    zone: WorldZone.ZoneD,
+    laneLength: 2,
+    requirements: {
+      requiredExact: [
+        { heroClass: HeroClass.Ranger, level: 1 },
+        { heroClass: HeroClass.Warrior, level: 1 },
+      ],
+      optionalPriestLevels: [1],
+    },
+    reward: { silver: 3, gems: 0 },
   },
 ];
 

@@ -31,6 +31,9 @@ const state = createInitialState();
 let gameState = state;
 let popupQueue: string[] = [];
 let isSetupComplete = false;
+let stage1Deck: string[] = [];
+const stage2Deck: string[] = [];
+const stage3Deck: string[] = [];
 const demoPhases = [
   'Accept Missions',
   'Guild Hiring',
@@ -69,20 +72,51 @@ const phaseInstruction: Record<DemoPhase, string> = {
 const getCurrentDemoPhase = (): DemoPhase => demoPhases[currentDemoPhaseIndex];
 
 const getDeckCounts = (state: GameState): { stage1: number; stage2: number; stage3: number } => {
-  const onBoard = new Set(state.missionBoard.map((slot) => slot.missionId).filter((id): id is string => Boolean(id)));
-  const stage1 = state.missions.filter((m) => m.stage === 1 && !onBoard.has(m.id)).length;
-  const stage2 = state.missions.filter((m) => m.stage === 2).length;
-  const stage3 = state.missions.filter((m) => m.stage === 3).length;
-  return { stage1, stage2, stage3 };
+  return { stage1: stage1Deck.length, stage2: stage2Deck.length, stage3: stage3Deck.length };
+};
+
+const generatePublicMissions = (count: number): void => {
+  let remaining = count;
+  gameState = {
+    ...gameState,
+    missionBoard: gameState.missionBoard.map((slot) => {
+      if (remaining <= 0 || slot.missionId !== null) return slot;
+      const nextMissionId = stage1Deck.shift() ?? null;
+      if (!nextMissionId) return slot;
+      remaining -= 1;
+      return { ...slot, missionId: nextMissionId };
+    }),
+  };
+};
+
+const generateHeroVillageTokens = (count: number): void => {
+  const availableIds = gameState.heroes
+    .filter((hero) => hero.level === 1)
+    .map((hero) => hero.id)
+    .filter((id) => !gameState.heroVillageHeroIds.includes(id));
+  const generated = availableIds.slice(0, count);
+  gameState = {
+    ...gameState,
+    heroVillageHeroIds: [...gameState.heroVillageHeroIds, ...generated],
+  };
+};
+
+const getNextAcceptPlayerIndex = (): number => {
+  for (let offset = 1; offset <= gameState.players.length; offset += 1) {
+    const idx = (activeAcceptPlayerIndex + offset) % gameState.players.length;
+    const id = gameState.players[idx]?.id;
+    if (id && !passedAcceptPlayers.has(id)) return idx;
+  }
+  return activeAcceptPlayerIndex;
 };
 
 const initializeDemoSetup = (): void => {
   const stage1Missions = gameState.missions.filter((mission) => mission.stage === 1).map((mission) => mission.id);
-  const boardIds = stage1Missions.slice(0, 5);
+  stage1Deck = [...stage1Missions];
   gameState = {
     ...gameState,
-    missionBoard: gameState.missionBoard.map((slot, idx) => ({ ...slot, missionId: boardIds[idx] ?? null })),
-    heroVillageHeroIds: gameState.heroes.filter((hero) => !(hero.heroClass === 'Warrior' && hero.level === 3)).map((hero) => hero.id),
+    missionBoard: gameState.missionBoard.map((slot) => ({ ...slot, missionId: null })),
+    heroVillageHeroIds: [],
     players: gameState.players.map((player) => ({
       ...player,
       reputation: STARTING_RESOURCES.reputation,
@@ -99,6 +133,10 @@ const initializeDemoSetup = (): void => {
   currentDemoPhaseIndex = 0;
   activeAcceptPlayerIndex = 0;
   passedAcceptPlayers = new Set();
+  generatePublicMissions(2);
+  enqueuePopup('Public Missions generated: 2 cards.');
+  generateHeroVillageTokens(2);
+  enqueuePopup('Hero Village generated: 2 Level 1 heroes.');
 };
 
 const enqueuePopup = (message: string): void => {
@@ -252,7 +290,7 @@ const render = (): void => {
       if (playerId !== activePlayerId || passedAcceptPlayers.has(playerId)) return;
       const prev = gameState;
       gameState = acceptMissionFromBoard(gameState, playerId, missionId);
-      activeAcceptPlayerIndex = (activeAcceptPlayerIndex + 1) % gameState.players.length;
+      activeAcceptPlayerIndex = getNextAcceptPlayerIndex();
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
       render();
     },
@@ -261,8 +299,7 @@ const render = (): void => {
       const activePlayerId = gameState.players[activeAcceptPlayerIndex]?.id;
       if (!activePlayerId) return;
       passedAcceptPlayers.add(activePlayerId);
-      const nextIndex = (activeAcceptPlayerIndex + 1) % gameState.players.length;
-      activeAcceptPlayerIndex = nextIndex;
+      activeAcceptPlayerIndex = getNextAcceptPlayerIndex();
       render();
     },
     onResolveMission: (missionId) => {
@@ -281,6 +318,20 @@ const render = (): void => {
         return;
       }
       if (phase === 'Accept Missions' && passedAcceptPlayers.size < gameState.players.length) return;
+      if (phase === 'End Round') {
+        currentDemoPhaseIndex = 0;
+        passedAcceptPlayers = new Set();
+        activeAcceptPlayerIndex = 0;
+        generatePublicMissions(2);
+        enqueuePopup('Public Missions generated: 2 cards.');
+        generateHeroVillageTokens(2);
+        enqueuePopup('Hero Village generated: 2 Level 1 heroes.');
+        const nextPhase = getCurrentDemoPhase();
+        enqueuePopup(`Phase: ${nextPhase} — Acting: ${gameState.players[0]?.name ?? 'Player 1'} — ${phaseInstruction[nextPhase]}`);
+        render();
+        return;
+      }
+
       currentDemoPhaseIndex = Math.min(currentDemoPhaseIndex + 1, demoPhases.length - 1);
       if (phase === 'Accept Missions') {
         passedAcceptPlayers = new Set();
