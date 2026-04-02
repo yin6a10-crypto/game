@@ -17,6 +17,7 @@ import {
 import { isMissionFullyStaffed } from './core/assignment';
 import { canDepartMission } from './core/departure';
 import { getCurrentResolutionItem } from './core/hiring';
+import { getEligibleAssignedRangersForPoaching, getValidRangerTargetMissions } from './core/poaching';
 import { renderGame } from './ui/renderGame';
 import { isEntryReadyToResolve } from './core/worldMap';
 import { GameState } from './core/types';
@@ -49,6 +50,8 @@ type DemoPhase = (typeof demoPhases)[number];
 let currentDemoPhaseIndex = 0;
 let activeAcceptPlayerIndex = 0;
 let passedAcceptPlayers = new Set<string>();
+let lockedHiringPlayers = new Set<string>();
+let finishedAssignmentPlayers = new Set<string>();
 
 const STARTING_RESOURCES = {
   reputation: 0,
@@ -110,6 +113,16 @@ const getNextAcceptPlayerIndex = (): number => {
   return activeAcceptPlayerIndex;
 };
 
+const announcePhase = (phase: DemoPhase): void => {
+  const who =
+    phase === 'Accept Missions'
+      ? gameState.players[activeAcceptPlayerIndex]?.name ?? 'Player'
+      : phase === 'Hire Resolution'
+        ? gameState.players.find((p) => p.id === (getCurrentResolutionItem(gameState)?.priorityPlayerIds[0] ?? ''))?.name ?? 'Player'
+        : 'Both Players';
+  enqueuePopup(`${phase}. ${who}: ${phaseInstruction[phase]}`);
+};
+
 const initializeDemoSetup = (): void => {
   const stage1Missions = gameState.missions.filter((mission) => mission.stage === 1).map((mission) => mission.id);
   stage1Deck = [...stage1Missions];
@@ -133,10 +146,69 @@ const initializeDemoSetup = (): void => {
   currentDemoPhaseIndex = 0;
   activeAcceptPlayerIndex = 0;
   passedAcceptPlayers = new Set();
+  lockedHiringPlayers = new Set();
+  finishedAssignmentPlayers = new Set();
   generatePublicMissions(2);
-  enqueuePopup('Public Missions generated: 2 cards.');
+  enqueuePopup('2 Public Missions appeared.');
   generateHeroVillageTokens(2);
-  enqueuePopup('Hero Village generated: 2 Level 1 heroes.');
+  enqueuePopup('2 Level 1 heroes entered Hero Village.');
+  announcePhase(getCurrentDemoPhase());
+};
+
+const hasAnyPoachAvailable = (): boolean => {
+  return gameState.players.some((player) => getValidRangerTargetMissions(gameState, player.id).length > 0 && getEligibleAssignedRangersForPoaching(gameState, player.id).length > 0);
+};
+
+const hasAnyDepartable = (): boolean => {
+  return gameState.players.some((player) =>
+    player.preparationSlots.some((missionId) => missionId !== null && canDepartMission(gameState, player.id, missionId)),
+  );
+};
+
+const hasReadyResolve = (): boolean => {
+  return gameState.worldMap.some((zone) =>
+    zone.lanes.oneTurn.some((entry) => isEntryReadyToResolve(entry, 1)) ||
+    zone.lanes.twoTurn.some((entry) => isEntryReadyToResolve(entry, 2)) ||
+    zone.lanes.threeTurn.some((entry) => isEntryReadyToResolve(entry, 3)),
+  );
+};
+
+const autoAdvanceIfComplete = (): void => {
+  const phase = getCurrentDemoPhase();
+  if (phase === 'Accept Missions' && passedAcceptPlayers.size === gameState.players.length) {
+    currentDemoPhaseIndex = 1;
+    announcePhase(getCurrentDemoPhase());
+  } else if (phase === 'Guild Hiring' && lockedHiringPlayers.size === gameState.players.length) {
+    gameState = lockOffersAndStartHiring(gameState);
+    currentDemoPhaseIndex = 2;
+    announcePhase(getCurrentDemoPhase());
+  } else if (phase === 'Hire Resolution' && !getCurrentResolutionItem(gameState)) {
+    currentDemoPhaseIndex = 3;
+    announcePhase(getCurrentDemoPhase());
+  } else if (phase === 'Assignment' && finishedAssignmentPlayers.size === gameState.players.length) {
+    currentDemoPhaseIndex = 4;
+    announcePhase(getCurrentDemoPhase());
+    if (!hasAnyPoachAvailable()) {
+      currentDemoPhaseIndex = 5;
+      announcePhase(getCurrentDemoPhase());
+    }
+  } else if (phase === 'Ranger Poach' && !gameState.poaching.pending && !hasAnyPoachAvailable()) {
+    currentDemoPhaseIndex = 5;
+    announcePhase(getCurrentDemoPhase());
+  } else if (phase === 'Departure' && !hasAnyDepartable()) {
+    currentDemoPhaseIndex = 6;
+    announcePhase(getCurrentDemoPhase());
+  } else if (phase === 'World Map Advance') {
+    currentDemoPhaseIndex = 7;
+    announcePhase(getCurrentDemoPhase());
+    if (!hasReadyResolve()) {
+      currentDemoPhaseIndex = 8;
+      announcePhase(getCurrentDemoPhase());
+    }
+  } else if (phase === 'Mission Resolution' && !hasReadyResolve()) {
+    currentDemoPhaseIndex = 8;
+    announcePhase(getCurrentDemoPhase());
+  }
 };
 
 const enqueuePopup = (message: string): void => {
@@ -212,13 +284,17 @@ const render = (): void => {
       const prev = gameState;
       gameState = updateHiringExtraPay(gameState, playerId, rowKey, delta);
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
       render();
     },
     onLockOffers: () => {
       if (phase !== 'Guild Hiring') return;
-      const prev = gameState;
-      gameState = lockOffersAndStartHiring(gameState);
-      collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+    },
+    onLockOffersPlayer: (playerId) => {
+      if (phase !== 'Guild Hiring') return;
+      if (lockedHiringPlayers.has(playerId)) return;
+      lockedHiringPlayers.add(playerId);
+      autoAdvanceIfComplete();
       render();
     },
     onHire: (playerId) => {
@@ -226,6 +302,7 @@ const render = (): void => {
       const prev = gameState;
       gameState = hireCurrentHero(gameState, playerId);
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
       render();
     },
     onPass: (playerId) => {
@@ -233,6 +310,7 @@ const render = (): void => {
       const prev = gameState;
       gameState = passOnCurrentHire(gameState, playerId);
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
       render();
     },
     onAssignHero: (playerId, heroId, missionId) => {
@@ -240,6 +318,13 @@ const render = (): void => {
       const prev = gameState;
       gameState = assignHiredHeroToPreparationMission(gameState, playerId, heroId, missionId);
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
+      render();
+    },
+    onFinishAssignment: (playerId) => {
+      if (phase !== 'Assignment') return;
+      finishedAssignmentPlayers.add(playerId);
+      autoAdvanceIfComplete();
       render();
     },
     onStartPoach: (toPlayerId, rangerHeroId, fromMissionId, targetMissionId, priceSilver) => {
@@ -254,6 +339,7 @@ const render = (): void => {
         priceSilver,
       );
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
       render();
     },
     onMatchPoach: (playerId) => {
@@ -261,6 +347,7 @@ const render = (): void => {
       const prev = gameState;
       gameState = matchPendingPoach(gameState, playerId);
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
       render();
     },
     onDeclinePoach: (playerId) => {
@@ -268,6 +355,7 @@ const render = (): void => {
       const prev = gameState;
       gameState = declinePendingPoach(gameState, playerId);
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
       render();
     },
     onDepartMission: (playerId, missionId) => {
@@ -275,6 +363,7 @@ const render = (): void => {
       const prev = gameState;
       gameState = departPreparationMission(gameState, playerId, missionId);
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
       render();
     },
     onAdvanceWorldMap: () => {
@@ -282,6 +371,7 @@ const render = (): void => {
       const prev = gameState;
       gameState = advanceWorldMap(gameState);
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
       render();
     },
     onAcceptMission: (playerId, missionId) => {
@@ -292,6 +382,7 @@ const render = (): void => {
       gameState = acceptMissionFromBoard(gameState, playerId, missionId);
       activeAcceptPlayerIndex = getNextAcceptPlayerIndex();
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
       render();
     },
     onAcceptPass: () => {
@@ -300,6 +391,7 @@ const render = (): void => {
       if (!activePlayerId) return;
       passedAcceptPlayers.add(activePlayerId);
       activeAcceptPlayerIndex = getNextAcceptPlayerIndex();
+      autoAdvanceIfComplete();
       render();
     },
     onResolveMission: (missionId) => {
@@ -307,45 +399,37 @@ const render = (): void => {
       const prev = gameState;
       gameState = resolveReadyMissionDemo(gameState, missionId);
       collectGuidanceMessages(prev, gameState).forEach(enqueuePopup);
+      autoAdvanceIfComplete();
       render();
     },
     onContinuePhase: () => {
       if (!canContinue) return;
       if (setupPhase) {
         initializeDemoSetup();
-        enqueuePopup(`Phase: ${getCurrentDemoPhase()} — Acting: ${gameState.players[0]?.name ?? 'Player 1'} — ${phaseInstruction[getCurrentDemoPhase()]}`);
         render();
         return;
       }
-      if (phase === 'Accept Missions' && passedAcceptPlayers.size < gameState.players.length) return;
       if (phase === 'End Round') {
         currentDemoPhaseIndex = 0;
         passedAcceptPlayers = new Set();
         activeAcceptPlayerIndex = 0;
+        lockedHiringPlayers = new Set();
+        finishedAssignmentPlayers = new Set();
         generatePublicMissions(2);
-        enqueuePopup('Public Missions generated: 2 cards.');
+        enqueuePopup('2 Public Missions appeared.');
         generateHeroVillageTokens(2);
-        enqueuePopup('Hero Village generated: 2 Level 1 heroes.');
-        const nextPhase = getCurrentDemoPhase();
-        enqueuePopup(`Phase: ${nextPhase} — Acting: ${gameState.players[0]?.name ?? 'Player 1'} — ${phaseInstruction[nextPhase]}`);
+        enqueuePopup('2 Level 1 heroes entered Hero Village.');
+        announcePhase(getCurrentDemoPhase());
         render();
         return;
       }
-
-      currentDemoPhaseIndex = Math.min(currentDemoPhaseIndex + 1, demoPhases.length - 1);
-      if (phase === 'Accept Missions') {
-        passedAcceptPlayers = new Set();
-        activeAcceptPlayerIndex = 0;
-      }
-      const nextPhase = getCurrentDemoPhase();
-      enqueuePopup(`Phase: ${nextPhase} — Acting: ${nextPhase === 'Accept Missions' ? gameState.players[0]?.name ?? 'Player 1' : 'Both Players'} — ${phaseInstruction[nextPhase]}`);
       render();
     },
     onDismissPopup: () => {
       popupQueue = popupQueue.slice(1);
       render();
     },
-  }, popupMessage, setupPhase ? 'Game Setup' : phase, actingPlayer, setupPhase ? 'Initialize heroes, missions, and starting resources.' : phaseInstruction[phase], canContinue, getDeckCounts(gameState), setupPhase, gameState.players[activeAcceptPlayerIndex]?.id ?? null);
+  }, popupMessage, setupPhase ? 'Game Setup' : phase, actingPlayer, setupPhase ? 'Initialize heroes, missions, and starting resources.' : phaseInstruction[phase], canContinue, getDeckCounts(gameState), setupPhase, gameState.players[activeAcceptPlayerIndex]?.id ?? null, lockedHiringPlayers, finishedAssignmentPlayers);
 };
 
 render();

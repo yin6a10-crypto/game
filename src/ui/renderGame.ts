@@ -18,9 +18,11 @@ import { isEntryReadyToResolve } from '../core/worldMap';
 interface RenderActions {
   onAdjustExtraPay: (playerId: string, rowKey: HiringRowKey, delta: 1 | -1) => void;
   onLockOffers: () => void;
+  onLockOffersPlayer: (playerId: string) => void;
   onHire: (playerId: string) => void;
   onPass: (playerId: string) => void;
   onAssignHero: (playerId: string, heroId: string, missionId: string) => void;
+  onFinishAssignment: (playerId: string) => void;
   onStartPoach: (
     toPlayerId: string,
     rangerHeroId: string,
@@ -61,7 +63,7 @@ const toHeroNameList = (state: GameState, heroIds: HeroId[]): string => {
 
 const renderHeroTokens = (state: GameState, heroIds: HeroId[]): string => {
   if (heroIds.length === 0) return '<span>-</span>';
-  return heroIds.map((id) => `<span class="hero-token">${getHeroName(state, id)}</span>`).join('');
+  return heroIds.map((id) => `<span class="hero-token" title="${getHeroName(state, id)}">${getHeroName(state, id)}</span>`).join('');
 };
 
 const attachActionButtons = (root: HTMLElement, actions: RenderActions): void => {
@@ -77,6 +79,14 @@ const attachActionButtons = (root: HTMLElement, actions: RenderActions): void =>
 
   root.querySelectorAll<HTMLElement>('[data-action="lock-offers"]').forEach((button) => {
     button.addEventListener('click', () => actions.onLockOffers());
+  });
+
+  root.querySelectorAll<HTMLElement>('[data-action="lock-offers-player"]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const playerId = button.dataset.playerId;
+      if (!playerId) return;
+      actions.onLockOffersPlayer(playerId);
+    });
   });
 
   root.querySelectorAll<HTMLElement>('[data-action="hire"]').forEach((button) => {
@@ -102,6 +112,14 @@ const attachActionButtons = (root: HTMLElement, actions: RenderActions): void =>
       const missionId = button.dataset.missionId;
       if (!playerId || !heroId || !missionId) return;
       actions.onAssignHero(playerId, heroId, missionId);
+    });
+  });
+
+  root.querySelectorAll<HTMLElement>('[data-action="finish-assignment"]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const playerId = button.dataset.playerId;
+      if (!playerId) return;
+      actions.onFinishAssignment(playerId);
     });
   });
 
@@ -344,13 +362,13 @@ const renderMissionCard = (
     : 'None';
   return `<article class="mission-card">
     <strong>${mission.title}</strong>
-    <small>Stage ${mission.stage} · ${mission.kind} · ${mission.dangerous ? 'Dangerous' : 'Safe'}</small>
-    <small>Zone ${mission.zone} · ${mission.laneLength}-turn</small>
-    <small>Reward: ${mission.reward.silver}s / ${mission.reward.gems}g${mission.reward.reputation ? ` / ${mission.reward.reputation} rep` : ''}</small>
-    <small>Required: ${requiredRoles}</small>
-    <small>Optional Priest: ${optionalPriest}</small>
-    <small>Assigned: ${assignedHeroIds.length ? toHeroNameList(state, assignedHeroIds) : '-'}</small>
-    <small>Status: ${status}</small>
+    <small>${mission.kind} · ${mission.dangerous ? 'Dangerous' : 'Safe'}</small>
+    <small>${mission.zone} · ${mission.laneLength}-turn</small>
+    <small>Reward ${mission.reward.silver}s ${mission.reward.gems}g${mission.reward.reputation ? ` ${mission.reward.reputation}rep` : ''}</small>
+    <small>Needs ${requiredRoles}</small>
+    <small>Priest ${optionalPriest}</small>
+    <small>Assigned ${assignedHeroIds.length ? toHeroNameList(state, assignedHeroIds) : '-'}</small>
+    <small>${status}</small>
   </article>`;
 };
 
@@ -396,7 +414,13 @@ const renderLane = (
 const renderZone = (state: GameState, zone: WorldMapZoneView, phaseLabel: string): string =>
   `<article class="zone-card"><h3>${zone.zone}</h3><ul><li><strong>1-turn lane:</strong> ${renderLane(state, zone.lanes.oneTurn, 1, phaseLabel)}</li><li><strong>2-turn lane:</strong> ${renderLane(state, zone.lanes.twoTurn, 2, phaseLabel)}</li><li><strong>3-turn lane:</strong> ${renderLane(state, zone.lanes.threeTurn, 3, phaseLabel)}</li></ul></article>`;
 
-const renderPlayerMat = (state: GameState, playerId: string, phaseLabel: string): string => {
+const renderPlayerMat = (
+  state: GameState,
+  playerId: string,
+  phaseLabel: string,
+  lockedHiringPlayers: Set<string>,
+  finishedAssignmentPlayers: Set<string>,
+): string => {
   const player = state.players.find((p) => p.id === playerId);
   if (!player) return '';
 
@@ -405,11 +429,13 @@ const renderPlayerMat = (state: GameState, playerId: string, phaseLabel: string)
       <h2>${player.name} Mat</h2>
       <div class="stats-row"><span>Reputation: <strong>${player.reputation}</strong></span><span>Silver: <strong>${player.silver}</strong></span><span>Gold: <strong>${player.gold}</strong></span><span>Gems: <strong>${player.gems}</strong></span></div>
       <div class="mat-grid">
-        <div><h3>Rest Zone</h3><div class="hero-token-row">${renderHeroTokens(state, player.restZoneHeroIds)}</div></div>
+        <div class="rest-zone"><h3>Rest Zone</h3><div class="hero-token-row">${renderHeroTokens(state, player.restZoneHeroIds)}</div></div>
         <div class="prep-area"><h3>Preparation Area</h3>${renderPreparationSlots(state, player, phaseLabel)}</div>
-        ${renderHiredPool(state, player)}
+        <div class="hired-pool">${renderHiredPool(state, player)}</div>
       </div>
       <section class="subpanel"><h3>Guild Hiring Board</h3>${renderHiringRows(player, state.hiring.offersLocked, Boolean(state.poaching.pending), phaseLabel)}</section>
+      <button data-action="lock-offers-player" data-player-id="${player.id}" ${phaseLabel === 'Guild Hiring' && !lockedHiringPlayers.has(player.id) ? '' : 'disabled'}>${lockedHiringPlayers.has(player.id) ? `Locked (${player.name})` : `Lock Offer (${player.name})`}</button>
+      <button data-action="finish-assignment" data-player-id="${player.id}" ${phaseLabel === 'Assignment' && !finishedAssignmentPlayers.has(player.id) ? '' : 'disabled'}>${finishedAssignmentPlayers.has(player.id) ? `Done (${player.name})` : `Finish Assignment (${player.name})`}</button>
       ${renderPoachingPanel(state, player, phaseLabel)}
     </section>
   `;
@@ -427,17 +453,19 @@ export const renderGame = (
   deckCounts: { stage1: number; stage2: number; stage3: number },
   setupPhase: boolean,
   activeAcceptPlayerId: string | null,
+  lockedHiringPlayers: Set<string>,
+  finishedAssignmentPlayers: Set<string>,
 ): void => {
   root.innerHTML = `
     <main class="app-shell">
       <h1>Fantasy Adventurers Guild — Prototype Scaffold</h1>
       <section class="panel stage-round"><h2>Current Phase: ${phaseLabel}</h2><p><strong>Acting:</strong> ${actingPlayer}</p><p class="hint">${phaseInstruction}</p><div class="stats-row"><span>Stage: <strong>${state.stage}</strong></span><span>Round: <strong>${state.round}</strong></span><span>Stage 1 Remaining: <strong>${deckCounts.stage1}</strong></span><span>Stage 2 Remaining: <strong>${deckCounts.stage2}</strong></span><span>Stage 3 Remaining: <strong>${deckCounts.stage3}</strong></span></div><button data-action="continue-phase" ${canContinue ? '' : 'disabled'}>${setupPhase ? 'Start Game Setup' : 'Next Step / Continue'}</button></section>
-      <section class="panel"><h2>Hire Resolution</h2><button data-action="lock-offers" ${state.hiring.offersLocked || state.poaching.pending || phaseLabel !== 'Guild Hiring' ? 'disabled' : ''}>Lock Offers / Start Hiring</button>${renderHiringResolutionPanel(state, phaseLabel)}</section>
+      <section class="panel"><h2>Hire Resolution</h2>${renderHiringResolutionPanel(state, phaseLabel)}</section>
       <section class="panel"><h2>Ranger Poaching</h2>${renderPendingPoachPanel(state, phaseLabel)}</section>
       <section class="panel hero-village"><h2>Hero Village (Public Pool)</h2><div class="hero-token-row">${renderHeroTokens(state, state.heroVillageHeroIds)}</div></section>
       ${renderMissionBoard(state, phaseLabel, activeAcceptPlayerId)}
       <section class="panel world-map"><h2>World Map</h2><button data-action="advance-world-map" ${state.poaching.pending || phaseLabel !== 'World Map Advance' ? 'disabled' : ''}>Advance World Map</button><div class="zones-grid">${state.worldMap.map((zone) => renderZone(state, zone, phaseLabel)).join('')}</div></section>
-      <section class="players-grid">${renderPlayerMat(state, 'p1', phaseLabel)}${renderPlayerMat(state, 'p2', phaseLabel)}</section>
+      <section class="players-grid">${renderPlayerMat(state, 'p1', phaseLabel, lockedHiringPlayers, finishedAssignmentPlayers)}${renderPlayerMat(state, 'p2', phaseLabel, lockedHiringPlayers, finishedAssignmentPlayers)}</section>
       ${
         popupMessage
           ? `<section class="modal-backdrop"><div class="modal-card"><p>${popupMessage}</p><button data-action="dismiss-popup">OK</button></div></section>`
