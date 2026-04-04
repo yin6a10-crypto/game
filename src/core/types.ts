@@ -2,17 +2,7 @@ export type PlayerId = string;
 export type HeroId = string;
 export type MissionId = string;
 export type PreparationSlot = MissionId | null;
-export type HiringRowKey =
-  | 'Warrior-1'
-  | 'Warrior-2'
-  | 'Warrior-3'
-  | 'Mage-1'
-  | 'Mage-2'
-  | 'Mage-3'
-  | 'Ranger-1'
-  | 'Ranger-2'
-  | 'Priest-1'
-  | 'Priest-2';
+export type HiringRowKey = 'Warrior' | 'Mage' | 'Ranger' | 'Priest';
 
 export enum HeroClass {
   Warrior = 'Warrior',
