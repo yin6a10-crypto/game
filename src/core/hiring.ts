@@ -15,35 +15,22 @@ export type WageCurrency = 'silver' | 'gems';
 export interface HiringRowDefinition {
   key: HiringRowKey;
   heroClass: HeroClass;
-  level: 1 | 2 | 3;
-  minWage: number;
+  baseWage: number;
   currency: WageCurrency;
 }
 
 export const HIRING_ROW_ORDER: HiringRowKey[] = [
-  'Warrior-3',
-  'Warrior-2',
-  'Warrior-1',
-  'Ranger-2',
-  'Ranger-1',
-  'Mage-3',
-  'Mage-2',
-  'Mage-1',
-  'Priest-2',
-  'Priest-1',
+  'Warrior',
+  'Ranger',
+  'Mage',
+  'Priest',
 ];
 
 export const HIRING_ROW_DEFS: HiringRowDefinition[] = [
-  { key: 'Warrior-1', heroClass: HeroClass.Warrior, level: 1, minWage: 0, currency: 'silver' },
-  { key: 'Warrior-2', heroClass: HeroClass.Warrior, level: 2, minWage: 1, currency: 'silver' },
-  { key: 'Warrior-3', heroClass: HeroClass.Warrior, level: 3, minWage: 2, currency: 'silver' },
-  { key: 'Mage-1', heroClass: HeroClass.Mage, level: 1, minWage: 0, currency: 'gems' },
-  { key: 'Mage-2', heroClass: HeroClass.Mage, level: 2, minWage: 1, currency: 'gems' },
-  { key: 'Mage-3', heroClass: HeroClass.Mage, level: 3, minWage: 2, currency: 'gems' },
-  { key: 'Ranger-1', heroClass: HeroClass.Ranger, level: 1, minWage: 0, currency: 'silver' },
-  { key: 'Ranger-2', heroClass: HeroClass.Ranger, level: 2, minWage: 1, currency: 'silver' },
-  { key: 'Priest-1', heroClass: HeroClass.Priest, level: 1, minWage: 0, currency: 'silver' },
-  { key: 'Priest-2', heroClass: HeroClass.Priest, level: 2, minWage: 1, currency: 'silver' },
+  { key: 'Warrior', heroClass: HeroClass.Warrior, baseWage: 0, currency: 'silver' },
+  { key: 'Mage', heroClass: HeroClass.Mage, baseWage: 0, currency: 'gems' },
+  { key: 'Ranger', heroClass: HeroClass.Ranger, baseWage: 0, currency: 'silver' },
+  { key: 'Priest', heroClass: HeroClass.Priest, baseWage: 0, currency: 'silver' },
 ];
 
 export const getHiringRowDefinition = (rowKey: HiringRowKey): HiringRowDefinition => {
@@ -53,16 +40,10 @@ export const getHiringRowDefinition = (rowKey: HiringRowKey): HiringRowDefinitio
 };
 
 export const createEmptyHiringBoardExtraPay = (): Record<HiringRowKey, number> => ({
-  'Warrior-1': 0,
-  'Warrior-2': 0,
-  'Warrior-3': 0,
-  'Mage-1': 0,
-  'Mage-2': 0,
-  'Mage-3': 0,
-  'Ranger-1': 0,
-  'Ranger-2': 0,
-  'Priest-1': 0,
-  'Priest-2': 0,
+  Warrior: 0,
+  Mage: 0,
+  Ranger: 0,
+  Priest: 0,
 });
 
 const getPlayerById = (state: GameState, playerId: PlayerId): PlayerState => {
@@ -77,9 +58,9 @@ const getHeroById = (state: GameState, heroId: HeroId): Hero => {
   return hero;
 };
 
-const getOfferForPlayerRow = (player: PlayerState, rowKey: HiringRowKey): number => {
+const getOfferForPlayerRow = (player: PlayerState, rowKey: HiringRowKey, heroLevel: 1 | 2 | 3): number => {
   const row = getHiringRowDefinition(rowKey);
-  return row.minWage + player.hiringBoardExtraPay[rowKey];
+  return row.baseWage + player.hiringBoardExtraPay[rowKey] + (heroLevel - 1);
 };
 
 const comparePriority = (
@@ -111,7 +92,7 @@ const getHeroSourceIds = (state: GameState): HeroId[] => {
 };
 
 const findRowForHero = (hero: Hero): HiringRowKey | null => {
-  const row = HIRING_ROW_DEFS.find((entry) => entry.heroClass === hero.heroClass && entry.level === hero.level);
+  const row = HIRING_ROW_DEFS.find((entry) => entry.heroClass === hero.heroClass);
   return row?.key ?? null;
 };
 
@@ -132,19 +113,24 @@ export const buildHiringResolutionOrder = (state: GameState): HiringResolutionIt
   const results: HiringResolutionItem[] = [];
 
   HIRING_ROW_ORDER.forEach((rowKey) => {
-    const rowHeroIds = (heroesByRow.get(rowKey) ?? []).sort();
+    const rowHeroIds = (heroesByRow.get(rowKey) ?? []).sort((a, b) => {
+      const heroA = getHeroById(state, a);
+      const heroB = getHeroById(state, b);
+      if (heroA.level !== heroB.level) return heroB.level - heroA.level;
+      return a.localeCompare(b);
+    });
 
     rowHeroIds.forEach((heroId) => {
       const hero = getHeroById(state, heroId);
       const eligiblePlayers = state.players.filter((player) => {
-        if (!rowKey.startsWith('Priest-')) return true;
+        if (rowKey !== 'Priest') return true;
         return player.reputation >= 0;
       });
 
       const ranked = [...eligiblePlayers]
         .sort((a, b) => {
-          const offerA = getOfferForPlayerRow(a, rowKey);
-          const offerB = getOfferForPlayerRow(b, rowKey);
+          const offerB = getOfferForPlayerRow(b, rowKey, hero.level);
+          const offerA = getOfferForPlayerRow(a, rowKey, hero.level);
           return comparePriority(hero, a, b, offerA, offerB, state.playerOrder);
         })
         .map((player) => player.id);
@@ -167,18 +153,18 @@ export const getCurrentResolutionItem = (state: GameState): HiringResolutionItem
 };
 
 export const isPriestUnavailableForPlayer = (player: PlayerState, rowKey: HiringRowKey): boolean => {
-  return rowKey.startsWith('Priest-') && player.reputation <= -1;
+  return rowKey === 'Priest' && player.reputation <= -1;
 };
 
-export const canPlayerAffordRowOffer = (player: PlayerState, rowKey: HiringRowKey): boolean => {
+export const canPlayerAffordRowOffer = (player: PlayerState, rowKey: HiringRowKey, heroLevel: 1 | 2 | 3): boolean => {
   const row = getHiringRowDefinition(rowKey);
-  const offer = getOfferForPlayerRow(player, rowKey);
+  const offer = getOfferForPlayerRow(player, rowKey, heroLevel);
   return row.currency === 'silver' ? player.silver >= offer : player.gems >= offer;
 };
 
-export const applyHireCost = (player: PlayerState, rowKey: HiringRowKey): PlayerState => {
+export const applyHireCost = (player: PlayerState, rowKey: HiringRowKey, heroLevel: 1 | 2 | 3): PlayerState => {
   const row = getHiringRowDefinition(rowKey);
-  const offer = getOfferForPlayerRow(player, rowKey);
+  const offer = getOfferForPlayerRow(player, rowKey, heroLevel);
 
   if (row.currency === 'silver') {
     return { ...player, silver: player.silver - offer };
@@ -187,8 +173,8 @@ export const applyHireCost = (player: PlayerState, rowKey: HiringRowKey): Player
   return { ...player, gems: player.gems - offer };
 };
 
-export const getActualOffer = (player: PlayerState, rowKey: HiringRowKey): number => {
-  return getOfferForPlayerRow(player, rowKey);
+export const getActualOffer = (player: PlayerState, rowKey: HiringRowKey, heroLevel: 1 | 2 | 3): number => {
+  return getOfferForPlayerRow(player, rowKey, heroLevel);
 };
 
 export const getMissionTitleById = (state: GameState, missionId: MissionId): string => {

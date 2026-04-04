@@ -147,13 +147,15 @@ export const hireCurrentHero = (state: GameState, playerId: PlayerId): GameState
   const player = state.players.find((entry) => entry.id === playerId);
   if (!player) return state;
   if (isPriestUnavailableForPlayer(player, currentItem.rowKey)) return state;
-  if (!canPlayerAffordRowOffer(player, currentItem.rowKey)) return state;
+  const hero = state.heroes.find((entry) => entry.id === currentItem.heroId);
+  if (!hero) return state;
+  if (!canPlayerAffordRowOffer(player, currentItem.rowKey, hero.level)) return state;
 
   return {
     ...state,
     players: state.players.map((entry) => {
       if (entry.id === playerId) {
-        const paid = applyHireCost(entry, currentItem.rowKey);
+        const paid = applyHireCost(entry, currentItem.rowKey, hero.level);
         return {
           ...paid,
           hiredPoolHeroIds: [...paid.hiredPoolHeroIds, currentItem.heroId],
