@@ -41,6 +41,8 @@ interface RenderActions {
   onDismissPopup: () => void;
 }
 
+type QueuedDeparture = { playerId: string; missionId: string };
+
 const getMissionTitle = (state: GameState, missionId: MissionId | null): string => {
   if (!missionId) return 'Empty';
   const mission = state.missions.find((item) => item.id === missionId);
@@ -203,7 +205,12 @@ const attachActionButtons = (root: HTMLElement, actions: RenderActions): void =>
   });
 };
 
-const renderPreparationSlots = (state: GameState, player: PlayerState, phaseLabel: string): string => {
+const renderPreparationSlots = (
+  state: GameState,
+  player: PlayerState,
+  phaseLabel: string,
+  queuedDepartureIds: Set<string>,
+): string => {
   return `
     <div class="prep-slots">
       ${player.preparationSlots
@@ -227,7 +234,7 @@ const renderPreparationSlots = (state: GameState, player: PlayerState, phaseLabe
               ${missionId ? renderMissionCard(state, missionId, staffed ? 'Fully Staffed' : 'Needs Roles', assignedIds) : '<span>Empty</span>'}
               ${
                 missionId && canDepartMission(state, player.id, missionId)
-                  ? `<button data-action="depart-mission" data-player-id="${player.id}" data-mission-id="${missionId}" ${state.poaching.pending || phaseLabel !== 'Departure' ? 'disabled' : ''}>Depart</button>`
+                  ? `<button data-action="depart-mission" data-player-id="${player.id}" data-mission-id="${missionId}" ${state.poaching.pending || phaseLabel !== 'Departure' || queuedDepartureIds.has(`${player.id}:${missionId}`) ? 'disabled' : ''}>${queuedDepartureIds.has(`${player.id}:${missionId}`) ? 'Selected' : 'Depart'}</button>`
                   : ''
               }
               ${assignControls}
@@ -243,18 +250,22 @@ const renderHiringRows = (player: PlayerState, offersLocked: boolean, isPoachPen
   return `
     <div class="hiring-rows">
       ${HIRING_ROW_DEFS.map((row) => {
-        const extraPay = player.hiringBoardExtraPay[row.key];
-        const actualOffer = getActualOffer(player, row.key);
+        const basePay = player.hiringBoardExtraPay[row.key];
         const priestBlocked = isPriestUnavailableForPlayer(player, row.key);
         const controlsDisabled = offersLocked || priestBlocked || phaseLabel !== 'Guild Hiring';
         const rowClass = priestBlocked ? 'hiring-box disabled-row' : 'hiring-box';
         const currency = row.currency === 'silver' ? 'silver' : 'gem';
+        const range =
+          row.key === 'Ranger' || row.key === 'Priest'
+            ? `Lv1 ${basePay} / Lv2 ${basePay + 1}`
+            : `Lv1 ${basePay} / Lv2 ${basePay + 1} / Lv3 ${basePay + 2}`;
         return `
           <div class="${rowClass}">
-            <div class="hiring-row-name">${row.heroClass} Lv.${row.level}</div>
-            <div class="hiring-pay">Pay: ${actualOffer} ${currency}</div>
+            <div class="hiring-row-name">${row.heroClass}</div>
+            <div class="hiring-pay">Base: ${basePay} ${currency}</div>
+            <small>${range}</small>
             <div class="hiring-row-controls">
-              <button data-action="adjust-extra-pay" data-player-id="${player.id}" data-row-key="${row.key}" data-delta="-1" ${controlsDisabled || extraPay === 0 || isPoachPending ? 'disabled' : ''}>-</button>
+              <button data-action="adjust-extra-pay" data-player-id="${player.id}" data-row-key="${row.key}" data-delta="-1" ${controlsDisabled || basePay === 0 || isPoachPending ? 'disabled' : ''}>-</button>
               <button data-action="adjust-extra-pay" data-player-id="${player.id}" data-row-key="${row.key}" data-delta="1" ${controlsDisabled || isPoachPending ? 'disabled' : ''}>+</button>
             </div>
             ${priestBlocked ? '<small>Unavailable: negative reputation</small>' : ''}
@@ -330,16 +341,19 @@ const renderHiringResolutionPanel = (state: GameState, phaseLabel: string): stri
   const hero = state.heroes.find((item) => item.id === current.heroId);
   const activePlayerId = current.priorityPlayerIds[current.currentPriorityIndex];
   const activePlayer = state.players.find((player) => player.id === activePlayerId);
+  const heroLevel = hero?.level ?? 1;
   const row = getHiringRowDefinition(current.rowKey);
-  const canAfford = activePlayer ? canPlayerAffordRowOffer(activePlayer, current.rowKey) : false;
+  const canAfford = activePlayer ? canPlayerAffordRowOffer(activePlayer, current.rowKey, heroLevel) : false;
   const priestBlocked = activePlayer ? isPriestUnavailableForPlayer(activePlayer, current.rowKey) : false;
   const hireDisabled = !canAfford || priestBlocked;
+  const currentOffer = activePlayer ? getActualOffer(activePlayer, current.rowKey, heroLevel) : 0;
 
   return `
     <div class="resolution-panel">
       <p><strong>Resolving Hero:</strong> ${hero ? `${hero.heroClass} Lv.${hero.level}` : current.heroId}</p>
-      <p><strong>Row:</strong> ${row.heroClass} Lv.${row.level}</p>
+      <p><strong>Class:</strong> ${row.heroClass}</p>
       <p><strong>Current Priority:</strong> ${activePlayer ? activePlayer.name : activePlayerId}</p>
+      <p><strong>Offer:</strong> ${currentOffer} ${row.currency === 'silver' ? 'silver' : 'gem'}</p>
       <div class="resolution-actions">
         <button data-action="hire" data-player-id="${activePlayerId}" ${hireDisabled || state.poaching.pending || phaseLabel !== 'Hire Resolution' ? 'disabled' : ''}>Hire</button>
         <button data-action="pass" data-player-id="${activePlayerId}" ${state.poaching.pending || phaseLabel !== 'Hire Resolution' ? 'disabled' : ''}>Pass</button>
@@ -420,9 +434,11 @@ const renderPlayerMat = (
   phaseLabel: string,
   lockedHiringPlayers: Set<string>,
   finishedAssignmentPlayers: Set<string>,
+  queuedDepartures: QueuedDeparture[],
 ): string => {
   const player = state.players.find((p) => p.id === playerId);
   if (!player) return '';
+  const queuedDepartureIds = new Set(queuedDepartures.map((entry) => `${entry.playerId}:${entry.missionId}`));
 
   return `
     <section class="panel player-mat">
@@ -430,7 +446,7 @@ const renderPlayerMat = (
       <div class="stats-row"><span>Reputation: <strong>${player.reputation}</strong></span><span>Silver: <strong>${player.silver}</strong></span><span>Gold: <strong>${player.gold}</strong></span><span>Gems: <strong>${player.gems}</strong></span></div>
       <div class="mat-grid">
         <div class="rest-zone"><h3>Rest Zone</h3><div class="hero-token-row">${renderHeroTokens(state, player.restZoneHeroIds)}</div></div>
-        <div class="prep-area"><h3>Preparation Area</h3>${renderPreparationSlots(state, player, phaseLabel)}</div>
+        <div class="prep-area"><h3>Preparation Area</h3>${renderPreparationSlots(state, player, phaseLabel, queuedDepartureIds)}</div>
         <div class="hired-pool">${renderHiredPool(state, player)}</div>
       </div>
       <section class="subpanel"><h3>Guild Hiring Board</h3>${renderHiringRows(player, state.hiring.offersLocked, Boolean(state.poaching.pending), phaseLabel)}</section>
@@ -455,6 +471,7 @@ export const renderGame = (
   activeAcceptPlayerId: string | null,
   lockedHiringPlayers: Set<string>,
   finishedAssignmentPlayers: Set<string>,
+  queuedDepartures: QueuedDeparture[],
 ): void => {
   root.innerHTML = `
     <main class="app-shell">
@@ -465,7 +482,7 @@ export const renderGame = (
       <section class="panel hero-village"><h2>Hero Village (Public Pool)</h2><div class="hero-token-row">${renderHeroTokens(state, state.heroVillageHeroIds)}</div></section>
       ${renderMissionBoard(state, phaseLabel, activeAcceptPlayerId)}
       <section class="panel world-map"><h2>World Map</h2><button data-action="advance-world-map" ${state.poaching.pending || phaseLabel !== 'World Map Advance' ? 'disabled' : ''}>Advance World Map</button><div class="zones-grid">${state.worldMap.map((zone) => renderZone(state, zone, phaseLabel)).join('')}</div></section>
-      <section class="players-grid">${renderPlayerMat(state, 'p1', phaseLabel, lockedHiringPlayers, finishedAssignmentPlayers)}${renderPlayerMat(state, 'p2', phaseLabel, lockedHiringPlayers, finishedAssignmentPlayers)}</section>
+      <section class="players-grid">${renderPlayerMat(state, 'p1', phaseLabel, lockedHiringPlayers, finishedAssignmentPlayers, queuedDepartures)}${renderPlayerMat(state, 'p2', phaseLabel, lockedHiringPlayers, finishedAssignmentPlayers, queuedDepartures)}</section>
       ${
         popupMessage
           ? `<section class="modal-backdrop"><div class="modal-card"><p>${popupMessage}</p><button data-action="dismiss-popup">OK</button></div></section>`
